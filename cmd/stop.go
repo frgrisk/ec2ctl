@@ -37,7 +37,7 @@ var stopCmd = &cobra.Command{
 		return validateInstanceArgs(args)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		StartStop(args, aws.InstanceStop)
+		startStop(args, aws.InstanceStop)
 	},
 }
 

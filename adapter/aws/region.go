@@ -25,6 +25,7 @@ type RegionSummary struct {
 // AccountSummary is a structure holding a slice of regions summaries across an entire account
 type AccountSummary []RegionSummary
 
+// Print prints the summary of instances in an account in tabular format
 func (u AccountSummary) Print() {
 	for _, region := range u {
 		region.Print()
@@ -32,6 +33,7 @@ func (u AccountSummary) Print() {
 	}
 }
 
+// GetInstanceRegion returns the region of an instance given an account summary
 func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	for _, region := range accSum {
 		for _, instance := range region.Instances {
@@ -43,6 +45,7 @@ func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	return "", errors.New("instance not found")
 }
 
+// Print prints the summary of instances in a given region in tabular format
 func (u RegionSummary) Print() {
 	structFields := reflect.VisibleFields(reflect.TypeOf(Instance{}))
 	var header []string

@@ -15,8 +15,11 @@ import (
 )
 
 const (
+	// InstanceStart is the action to start an instance
 	InstanceStart     string = "start"
+	// InstanceStop is the action to stop an instance
 	InstanceStop      string = "stop"
+	// InstanceHibernate is the action to hibernate an instance
 	InstanceHibernate string = "hibernate"
 )
 
@@ -197,9 +200,8 @@ func StartStopInstance(region string, action string, instanceID string) ([]types
 		}
 		if err != nil {
 			return nil, err
-		} else {
-			return result.StartingInstances, nil
 		}
+		return result.StartingInstances, nil
 
 	case InstanceStop, InstanceHibernate:
 		// Turn instances off
@@ -225,9 +227,8 @@ func StartStopInstance(region string, action string, instanceID string) ([]types
 		}
 		if err != nil {
 			return nil, err
-		} else {
-			return result.StoppingInstances, nil
 		}
+		return result.StoppingInstances, nil
 	default:
 		return nil, errors.New("invalid action")
 	}

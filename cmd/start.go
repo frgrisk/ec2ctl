@@ -41,7 +41,7 @@ var startCmd = &cobra.Command{
 		return validateInstanceArgs(args)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		StartStop(args, aws.InstanceStart)
+		startStop(args, aws.InstanceStart)
 	},
 }
 
@@ -61,7 +61,7 @@ func validateInstanceArgs(args []string) error {
 	return nil
 }
 
-func StartStop(instances []string, action string) {
+func startStop(instances []string, action string) {
 	// If a single region is not specified, query the instances in all regions and
 	// determine the region the instance is located in
 	var accSum aws.AccountSummary
@@ -85,22 +85,21 @@ func StartStop(instances []string, action string) {
 		if err != nil {
 			fmt.Printf("Failed to %s instance %q in region %q: %v\n", action, instanceID, region, err)
 			return
-		} else {
-			for _, stateChange := range state {
-				if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
-					fmt.Printf(
-						"Instance %s was already in a %s state.\n",
-						*stateChange.InstanceId,
-						stateChange.PreviousState.Name,
-					)
-				} else {
-					fmt.Printf(
-						"Instance %s state changed from %s to %s.\n",
-						*stateChange.InstanceId,
-						stateChange.PreviousState.Name,
-						stateChange.CurrentState.Name,
-					)
-				}
+		}
+		for _, stateChange := range state {
+			if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
+				fmt.Printf(
+					"Instance %s was already in a %s state.\n",
+					*stateChange.InstanceId,
+					stateChange.PreviousState.Name,
+				)
+			} else {
+				fmt.Printf(
+					"Instance %s state changed from %s to %s.\n",
+					*stateChange.InstanceId,
+					stateChange.PreviousState.Name,
+					stateChange.CurrentState.Name,
+				)
 			}
 		}
 	}

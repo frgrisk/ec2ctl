@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Output is a custom type for the supported output types of the command
 type Output int
 
 //go:generate stringer -type=Output
@@ -24,6 +25,7 @@ func (i *Output) Set(s string) error {
 	return fmt.Errorf("invalid output type: %q", s)
 }
 
+// Type ensures that the Output type satisfies the flag.Value interface
 func (i Output) Type() string {
 	return "string"
 }
