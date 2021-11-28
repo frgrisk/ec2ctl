@@ -42,7 +42,7 @@ var output types.Output
 var rootCmd = &cobra.Command{
 	Use:   "ec2ctl",
 	Short: "ec2ctl is a command line tool for interacting with AWS EC2 instances",
-	Long: `ec2ctl is a command line tool for interacting with AWS EC2 instances`,
+	Long:  `ec2ctl is a command line tool for interacting with AWS EC2 instances`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -56,7 +56,7 @@ func init() {
 	// Global Flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ec2ctl.yaml)")
 	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
-	rootCmd.PersistentFlags().Var(&output, "output","output format (table, json)")
+	rootCmd.PersistentFlags().Var(&output, "output", "output format (table, json)")
 }
 
 // initConfig reads in config file and ENV variables if set.
