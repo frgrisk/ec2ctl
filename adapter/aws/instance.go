@@ -16,9 +16,9 @@ import (
 
 const (
 	// InstanceStart is the action to start an instance
-	InstanceStart     string = "start"
+	InstanceStart string = "start"
 	// InstanceStop is the action to stop an instance
-	InstanceStop      string = "stop"
+	InstanceStop string = "stop"
 	// InstanceHibernate is the action to hibernate an instance
 	InstanceHibernate string = "hibernate"
 )
