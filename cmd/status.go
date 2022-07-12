@@ -39,9 +39,8 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "List available instances and their statuses",
-	Long: `This command lists all available instances and their statuses.
-
-Examples:
+	Long:  `This command lists all available instances and their statuses.`,
+	Example: `
   # Query all regions
   ec2ctl status
   # Query specific regions
