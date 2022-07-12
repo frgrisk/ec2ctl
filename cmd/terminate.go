@@ -40,7 +40,7 @@ var terminateCmd = &cobra.Command{
 		return validateInstanceArgs(args)
 	},
 	Run:     terminateInstance,
-	Aliases: []string{"terminate", "delete"},
+	Aliases: []string{"delete", "destroy"},
 }
 
 func init() {
