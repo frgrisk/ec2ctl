@@ -34,6 +34,7 @@ type Instance struct {
 	IP               string
 	Hibernation      bool
 	SpotInstanceType types.SpotInstanceType
+	Region           string
 	AZ               string
 }
 
@@ -42,8 +43,9 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 
 	ctx := context.TODO()
 
-	// Config sources can be passed to LoadDefaultConfig, these sources can implement one or more
-	// provider interfaces. These sources take priority over the standard environment and shared configuration values.
+	// Config sources can be passed to LoadDefaultConfig, these sources can implement
+	// one or more provider interfaces. These sources take priority over the standard
+	// environment and shared configuration values.
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 	)
@@ -114,9 +116,10 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 			instance.Type = inst.InstanceType
 			instance.IP = *inst.PrivateIpAddress
 			instance.Hibernation = *inst.HibernationOptions.Configured
+			instance.Region = region
 			instance.AZ = getInstanceAZ(resultStatus.InstanceStatuses, inst.InstanceId)
 			if inst.InstanceLifecycle == "" {
-				instance.Lifecycle = "on-demand"
+				instance.Lifecycle = string(types.InstanceLifecycleOnDemand)
 			} else {
 				instance.Lifecycle = string(inst.InstanceLifecycle)
 				if inst.InstanceLifecycle == types.InstanceLifecycleTypeSpot {
@@ -163,8 +166,9 @@ func StartStopInstance(region string, action string, instanceID string) ([]types
 
 	ctx := context.TODO()
 
-	// Config sources can be passed to LoadDefaultConfig, these sources can implement one or more
-	// provider interfaces. These sources take priority over the standard environment and shared configuration values.
+	// Config sources can be passed to LoadDefaultConfig, these sources can implement
+	// one or more provider interfaces. These sources take priority over the standard
+	// environment and shared configuration values.
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 	)
@@ -239,8 +243,9 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 
 	ctx := context.TODO()
 
-	// Config sources can be passed to LoadDefaultConfig, these sources can implement one or more
-	// provider interfaces. These sources take priority over the standard environment and shared configuration values.
+	// Config sources can be passed to LoadDefaultConfig, these sources can implement
+	// one or more provider interfaces. These sources take priority over the standard
+	// environment and shared configuration values.
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 	)

@@ -25,6 +25,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/frgrisk/ec2ctl/cmd/types"
 
