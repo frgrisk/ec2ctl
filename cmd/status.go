@@ -27,10 +27,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/frgrisk/ec2ctl/adapter/aws"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
