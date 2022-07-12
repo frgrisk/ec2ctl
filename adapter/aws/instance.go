@@ -282,6 +282,28 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 	return
 }
 
+func TerminateInstances(region string, instances []string) (err error) {
+
+	ctx := context.TODO()
+
+	// Config sources can be passed to LoadDefaultConfig, these sources can implement
+	// one or more provider interfaces. These sources take priority over the standard
+	// environment and shared configuration values.
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Create new EC2 client
+	svc := ec2.NewFromConfig(cfg)
+
+	_, err = svc.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+		InstanceIds: instances,
+	})
+	return
+}
+
 func getSpotRequestType(requests []types.SpotInstanceRequest, id *string) types.SpotInstanceType {
 	for _, request := range requests {
 		if *request.SpotInstanceRequestId == *id {
