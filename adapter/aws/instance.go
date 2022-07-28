@@ -137,6 +137,8 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 				}
 			}
 
+			instance.Name = ""
+			instance.Environment = ""
 			for _, tag := range inst.Tags {
 				if *tag.Key == "Name" {
 					instance.Name = *tag.Value
