@@ -118,6 +118,7 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 			instance.Hibernation = *inst.HibernationOptions.Configured
 			instance.Region = region
 			instance.AZ = getInstanceAZ(resultStatus.InstanceStatuses, inst.InstanceId)
+			instance.SpotInstanceType = ""
 			if inst.InstanceLifecycle == "" {
 				instance.Lifecycle = string(types.InstanceLifecycleOnDemand)
 			} else {
