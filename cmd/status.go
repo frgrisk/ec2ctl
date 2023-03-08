@@ -47,7 +47,7 @@ Examples:
   ec2ctl status --tag Environment:dev,Name:my-server.com
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		// If a region subset is not specified, query all regions
+		// Get account summary based on regions and tags specified
 		accSum := getAccountSummary(regions, tags)
 
 		switch output {
