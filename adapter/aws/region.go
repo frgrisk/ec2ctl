@@ -35,19 +35,28 @@ func (u AccountSummary) Print() {
 
 // Prompts user for confirmation
 func (u AccountSummary) Prompt(action string) []string {
-
+	//create a new slice of instanceID strings
 	instanceIDs := []string{}
 	var s string
-	var label string = "This command will " + action + " the following running instances matching the filter:\n\n"
+	//initialise string for prompt
+	label := "This command will " + action + " the following running instances matching the filter:\n\n"
+	errLabel := "No instances are available for " + action + " command"
 	for _, region := range u {
 		label, instanceIDs = region.Prompt(label, instanceIDs, action)
 	}
 	label += "\nWould you like to proceed? [Y/n]"
-	fmt.Print(label)
+	//print labels onto terminal and scan terminal for input
+	if len(instanceIDs) == 0 {
+		fmt.Print(errLabel)
+	} else {
+		fmt.Println(label)
+	}
 	fmt.Scanln(&s)
+	//if user acknowledges, return instanceIDs associated
 	if s == "Y" {
 		return instanceIDs
 	}
+	//else, return empty
 	return []string{}
 }
 
@@ -144,18 +153,18 @@ func GetRegions() (regions []string) {
 }
 
 func (u RegionSummary) Prompt(label string, instanceIDs []string, action string) (string, []string) {
+	const STOP string = "stop"
+	const START string = "start"
 	for _, instance := range u.Instances {
 		switch action {
-		case "stop":
+		case STOP:
 			if instance.Status == types.InstanceStateNameRunning {
 				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
 			}
-
-		case "start":
+		case START:
 			if instance.Status == types.InstanceStateNameStopped {
 				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
 			}
-
 		}
 	}
 	return label, instanceIDs

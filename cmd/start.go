@@ -67,7 +67,7 @@ func startStop(instances []string, action string) {
 	regCheck := len(regions)
 	var accSum aws.AccountSummary = getAccountSummary(regions)
 	//determine if user included regions tag
-	if regCheck == 1 {
+	if regCheck > 0 {
 		//if user included regions tag prompt the user for confirmation
 		insIDs := accSum.Prompt(action)
 		if len(instances) == 0 {
@@ -77,7 +77,7 @@ func startStop(instances []string, action string) {
 	for _, instanceID := range instances {
 		var region string
 		var err error
-		if len(regions) == 1 {
+		if regCheck == 1 {
 			region = regions[0]
 		} else {
 			region, err = aws.GetInstanceRegion(accSum, instanceID)
