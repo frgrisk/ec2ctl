@@ -46,7 +46,7 @@ var startCmd = &cobra.Command{
 }
 
 func validateInstanceArgs(args []string) error {
-	if len(args) < 1 {
+	if len(args) < 1 && len(regions) == 0 {
 		return errors.New("at least one instance ID is required")
 	}
 	for _, arg := range args {
@@ -64,9 +64,15 @@ func validateInstanceArgs(args []string) error {
 func startStop(instances []string, action string) {
 	// If a single region is not specified, query the instances in all regions and
 	// determine the region the instance is located in
-	var accSum aws.AccountSummary
-	if len(regions) != 1 {
-		accSum = getAccountSummary(regions)
+	regCheck := len(regions)
+	var accSum aws.AccountSummary = getAccountSummary(regions)
+	//determine if user included regions tag
+	if regCheck == 1 {
+		//if user included regions tag prompt the user for confirmation
+		insIDs := accSum.Prompt(action)
+		if len(instances) == 0 {
+			instances = insIDs
+		}
 	}
 	for _, instanceID := range instances {
 		var region string

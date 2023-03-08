@@ -33,6 +33,24 @@ func (u AccountSummary) Print() {
 	}
 }
 
+// Prompts user for confirmation
+func (u AccountSummary) Prompt(action string) []string {
+
+	instanceIDs := []string{}
+	var s string
+	var label string = "This command will " + action + " the following running instances matching the filter:\n\n"
+	for _, region := range u {
+		label, instanceIDs = region.Prompt(label, instanceIDs, action)
+	}
+	label += "\nWould you like to proceed? [Y/n]"
+	fmt.Print(label)
+	fmt.Scanln(&s)
+	if s == "Y" {
+		return instanceIDs
+	}
+	return []string{}
+}
+
 // GetInstanceRegion returns the region of an instance given an account summary
 func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	for _, region := range accSum {
@@ -123,4 +141,28 @@ func GetRegions() (regions []string) {
 	}
 
 	return regions
+}
+
+func (u RegionSummary) Prompt(label string, instanceIDs []string, action string) (string, []string) {
+	for _, instance := range u.Instances {
+		switch action {
+		case "stop":
+			if instance.Status == types.InstanceStateNameRunning {
+				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
+			}
+
+		case "start":
+			if instance.Status == types.InstanceStateNameStopped {
+				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
+			}
+
+		}
+	}
+	return label, instanceIDs
+}
+
+func PromptAppend(label string, instanceIDs []string, IDs string) (string, []string) {
+	instanceIDs = append(instanceIDs, IDs)
+	label += "*" + IDs + "\n"
+	return label, instanceIDs
 }
