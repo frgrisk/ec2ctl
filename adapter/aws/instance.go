@@ -39,7 +39,7 @@ type Instance struct {
 }
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(region string, c chan RegionSummary) {
+func GetDeployedInstances(region string, tags map[string]string, c chan RegionSummary) {
 
 	ctx := context.TODO()
 
@@ -58,8 +58,8 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 	var rSummary RegionSummary
 	rSummary.Region = region
 
-	// TODO: Add support for multiple filters
-	tagFilter := types.Filter{}
+	filters := []types.Filter{}
+
 	stateFilter := types.Filter{
 		Name: aws.String("instance-state-name"),
 		Values: []string{
@@ -70,12 +70,21 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 			string(types.InstanceStateNameStopped),
 		},
 	}
+	filters = append(filters, stateFilter)
+	
+	// TODO: Add support for multiple filters
+	for tagKey,tagVal := range tags {
+		newTagFilter := types.Filter{
+			Name: aws.String("tag:"+tagKey),
+			Values: []string{
+				string(tagVal),
+			},
+		}
+		filters = append(filters,newTagFilter)
+	}
 
 	input := &ec2.DescribeInstancesInput{
-		Filters: []types.Filter{
-			tagFilter,
-			stateFilter,
-		},
+		Filters: filters,
 	}
 
 	result, err := svc.DescribeInstances(ctx, input)

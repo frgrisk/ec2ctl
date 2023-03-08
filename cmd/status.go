@@ -43,10 +43,12 @@ Examples:
   ec2ctl status
   # Query specific regions
   ec2ctl status --regions us-east-1,ap-southeast-1
+  # Query specific tags
+  ec2ctl status --tag Environment:dev,Name:my-server.com
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If a region subset is not specified, query all regions
-		accSum := getAccountSummary(regions)
+		accSum := getAccountSummary(regions, tags)
 
 		switch output {
 		case types.JSON:
@@ -62,14 +64,14 @@ Examples:
 	},
 }
 
-func getAccountSummary(regions []string) (accSum aws.AccountSummary) {
+func getAccountSummary(regions []string, tags map[string]string) (accSum aws.AccountSummary) {
 	if len(regions) == 0 {
 		regions = aws.GetRegions()
 	}
 
 	c := make(chan aws.RegionSummary)
 	for _, r := range regions {
-		go aws.GetDeployedInstances(r, c)
+		go aws.GetDeployedInstances(r, tags, c)
 	}
 	var regSum aws.RegionSummary
 

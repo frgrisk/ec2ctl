@@ -66,7 +66,7 @@ func startStop(instances []string, action string) {
 	// determine the region the instance is located in
 	var accSum aws.AccountSummary
 	if len(regions) != 1 {
-		accSum = getAccountSummary(regions)
+		accSum = getAccountSummary(regions, tags)
 	}
 	for _, instanceID := range instances {
 		var region string

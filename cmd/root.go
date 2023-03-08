@@ -38,6 +38,8 @@ var regions []string
 
 var output types.Output
 
+var tags map[string]string
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ec2ctl",
@@ -57,6 +59,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ec2ctl.yaml)")
 	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
 	rootCmd.PersistentFlags().Var(&output, "output", "output format (table, json)")
+	rootCmd.PersistentFlags().StringToStringVar(&tags, "tag", map[string]string{}, "query by tags - specified as key=value pairs (e.g. Environment=dev,Name=compute-dev.duo.frgrisk.com)")
 }
 
 // initConfig reads in config file and ENV variables if set.
