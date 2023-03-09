@@ -23,6 +23,7 @@ const (
 	InstanceHibernate string = "hibernate"
 )
 
+
 // Instance is a struct to hold instance characteristics
 type Instance struct {
 	Name             string
@@ -37,6 +38,8 @@ type Instance struct {
 	Region           string
 	AZ               string
 }
+
+
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
 func GetDeployedInstances(region string, tags map[string]string, c chan RegionSummary) {
