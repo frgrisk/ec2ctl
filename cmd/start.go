@@ -67,29 +67,35 @@ func startStop(instances []string, action string) {
 	regCheck := len(regions)
 	var accSum aws.AccountSummary = getAccountSummary(regions, tags)
 	//determine if user included regions tag
-	if regCheck > 0 {
+	//PLEASE NOTE: CODE BLOCK 71-75 MIGHT CHANGE DEPENDING ON USER REQUIREMENTS
+	if regCheck > 0 && len(instances) == 0 {
 		//if user included regions tag prompt the user for confirmation
 		insIDs := accSum.Prompt(action)
-		if len(instances) == 0 {
-			instances = insIDs
-		}
+		instances = insIDs
 	}
-	for _, instanceID := range instances {
-		var region string
-		var err error
-		if regCheck == 1 {
-			region = regions[0]
-		} else {
+	//preprocessing is done to filter and group the instances by the region
+	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
+	var region string
+	var err error
+	regionMap := make(map[string][]string)
+	if regCheck == 1 {
+		region = regions[0]
+		regionMap[region] = append(regionMap[region], instances...)
+	} else {
+		for _, instanceID := range instances {
 			region, err = aws.GetInstanceRegion(accSum, instanceID)
 			if err != nil {
 				fmt.Printf("Error enountered looking up region for instance %q: %s\n", instanceID, err)
 				return
+			} else {
+				regionMap[region] = append(regionMap[region], instanceID)
 			}
 		}
-		// TODO: Start all instances in a given region in one API call
-		state, err := aws.StartStopInstance(region, action, instanceID)
+	}
+	for key, instanceSlice := range regionMap {
+		state, err := aws.StartStopInstance(key, action, instanceSlice)
 		if err != nil {
-			fmt.Printf("Failed to %s instance %q in region %q: %v\n", action, instanceID, region, err)
+			fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceSlice, region, err)
 			return
 		}
 		for _, stateChange := range state {
