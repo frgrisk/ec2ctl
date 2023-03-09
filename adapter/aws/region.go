@@ -14,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
 	"github.com/olekukonko/tablewriter"
+	"github.com/gookit/color"
+
 )
 
 // RegionSummary is a structure holding deployed instances in a given region
@@ -38,8 +40,21 @@ func (u AccountSummary) Prompt(action string) []string {
 	//create a new slice of instanceID strings
 	instanceIDs := []string{}
 	var s string
-	//initialise string for prompt
-	label := "This command will " + action + " the following running instances matching the filter:\n\n"
+
+	// fmt.Println("\n" + "This command will " + action + " the following running instances matching the filter:\n\n")
+	// instanceTable := tablewriter.NewWriter(os.Stdout)
+
+	// structFields := reflect.VisibleFields(reflect.TypeOf(Instance{}))
+	// var header []string
+	// var headerColors []tablewriter.Colors
+	// for _, f := range structFields {
+	// 	header = append(header, f.Name)
+	// 	headerColors = append(headerColors, tablewriter.Colors{tablewriter.Bold})
+	// }
+
+	// instanceTable.SetHeader([]string{"Name", "Age", "Occupation"})
+	label := "\n" + "This command will " + action + " the following running instances matching the filter:\n\n"
+
 	errLabel := "No instances are available for " + action + " command"
 	for _, region := range u {
 		label, instanceIDs = region.Prompt(label, instanceIDs, action)
@@ -74,46 +89,48 @@ func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 
 // Print prints the summary of instances in a given region in tabular format
 func (u RegionSummary) Print() {
-	structFields := reflect.VisibleFields(reflect.TypeOf(Instance{}))
 	var header []string
 	var headerColors []tablewriter.Colors
+	var rows [][]string
+	var rowColors [][]tablewriter.Colors
+
+	structFields := reflect.VisibleFields(reflect.TypeOf(Instance{}))
 	for _, f := range structFields {
 		header = append(header, f.Name)
 		headerColors = append(headerColors, tablewriter.Colors{tablewriter.Bold})
 	}
-	fmt.Println(u.Region)
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(header)
-	table.SetHeaderColor(headerColors...)
+
 	for _, instance := range u.Instances {
 		var row []string
-		var rowColors []tablewriter.Colors
+		var rowColor []tablewriter.Colors
 		for _, f := range structFields {
 			value := fmt.Sprintf("%v", reflect.ValueOf(instance).FieldByName(f.Name).Interface())
 			row = append(row, value)
 			switch f.Name {
 			case "Name":
-				rowColors = append(rowColors, tablewriter.Colors{tablewriter.Bold})
+				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold})
 			case "Status":
 				switch instance.Status {
 				case types.InstanceStateNameRunning:
-					rowColors = append(rowColors, tablewriter.Colors{tablewriter.FgGreenColor})
+					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgGreenColor})
 				case types.InstanceStateNameStopped:
-					rowColors = append(rowColors, tablewriter.Colors{tablewriter.FgRedColor})
+					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgRedColor})
 				case types.InstanceStateNamePending, types.InstanceStateNameStopping:
-					rowColors = append(rowColors, tablewriter.Colors{tablewriter.FgYellowColor})
+					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgYellowColor})
 				case types.InstanceStateNameTerminated:
-					rowColors = append(rowColors, tablewriter.Colors{tablewriter.FgBlackColor})
+					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgBlackColor})
 				default:
-					rowColors = append(rowColors, tablewriter.Colors{})
+					rowColor = append(rowColor, tablewriter.Colors{})
 				}
 			default:
-				rowColors = append(rowColors, tablewriter.Colors{})
+				rowColor = append(rowColor, tablewriter.Colors{})
 			}
 		}
-		table.Rich(row, rowColors)
+		rows = append(rows, row)
+		rowColors = append(rowColors, rowColor)
 	}
-	table.Render()
+	fmt.Println(u.Region)
+	WriteTable(header, rows, headerColors, rowColors)
 }
 
 // GetRegions is a function to retrieve all active regions in an account
@@ -159,19 +176,39 @@ func (u RegionSummary) Prompt(label string, instanceIDs []string, action string)
 		switch action {
 		case STOP:
 			if instance.Status == types.InstanceStateNameRunning {
-				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
+				label, instanceIDs = PromptAppend(label, instanceIDs, instance)
 			}
 		case START:
 			if instance.Status == types.InstanceStateNameStopped {
-				label, instanceIDs = PromptAppend(label, instanceIDs, instance.ID)
+				label, instanceIDs = PromptAppend(label, instanceIDs, instance)
 			}
 		}
 	}
 	return label, instanceIDs
 }
 
-func PromptAppend(label string, instanceIDs []string, IDs string) (string, []string) {
-	instanceIDs = append(instanceIDs, IDs)
-	label += "*" + IDs + "\n"
+func PromptAppend(label string, instanceIDs []string, instance Instance) (string, []string) {
+	instanceIDs = append(instanceIDs, instance.ID)
+	nameLabel := color.New(color.FgCyan).Sprint(instance.Name) + " "
+	idLabel := color.New(color.FgGreen).Sprint(instance.ID) + " "
+	environmentLabel := color.New(color.FgWhite).Sprint(instance.Environment)
+
+
+
+	label += ">> " + nameLabel + idLabel + environmentLabel + "\n"
 	return label, instanceIDs
+}
+
+
+func WriteTable(header []string, rows [][]string, headerColors []tablewriter.Colors, rowColors [][]tablewriter.Colors) {
+	
+	table := tablewriter.NewWriter(os.Stdout) 
+
+	table.SetHeader(header)
+	table.SetHeaderColor(headerColors...)
+	for i, _ := range rows {
+		table.Rich(rows[i],rowColors[i])
+	}
+	table.Render()
+
 }
