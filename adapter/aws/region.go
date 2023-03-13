@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
 	"github.com/olekukonko/tablewriter"
-
 )
 
 // RegionSummary is a structure holding deployed instances in a given region
@@ -35,18 +34,20 @@ func (u AccountSummary) Print() {
 }
 
 // Prompts user for confirmation
-func (u AccountSummary) Prompt(action string) []string {
-	var instances []Instance
-	var instanceIDs []string
+func (u AccountSummary) Prompt(action string, regionMap *map[string][]string) {
+	instances := []Instance{}
 	var s string
-
-	questionLabel := "\n" + "This command will " + action + " the following running instances matching the filter:\n"
+	regionTmp := make(map[string][]string)
+	questionLabel := "\nThis command will " + action + " the following running instances matching the filter:\n"
 	confirmationLabel := "\nWould you like to proceed? [Y/n]"
 	errLabel := "No instances are available for " + action + " command"
-	for _, region := range u {
-		instances = region.Prompt(instances, action)
+	for _, regionSummary := range u {
+		filteredInstances := regionSummary.Prompt([]Instance{}, action)
+		instances = append(instances, filteredInstances...)
+		if len(filteredInstances) > 0 {
+			regionTmp[regionSummary.Region] = append(regionTmp[regionSummary.Region], IDs(filteredInstances)...)
+		}
 	}
-
 	//print labels onto terminal and scan terminal for input
 	if len(instances) == 0 {
 		fmt.Print(errLabel)
@@ -55,17 +56,11 @@ func (u AccountSummary) Prompt(action string) []string {
 		WriteTable(instances)
 		fmt.Println(confirmationLabel)
 	}
-
 	fmt.Scanln(&s)
-	for _, instance := range instances {
-		instanceIDs = append(instanceIDs,instance.ID)
-	}
 	//if user acknowledges, return instanceIDs associated
 	if s == "Y" {
-		return instanceIDs
+		*regionMap = regionTmp
 	}
-	//else, return empty
-	return []string{}
 }
 
 // GetInstanceRegion returns the region of an instance given an account summary
@@ -122,9 +117,11 @@ func GetRegions() (regions []string) {
 	return regions
 }
 
-func (u RegionSummary) Prompt(instances []Instance, action string) ([]Instance) {
-	const STOP string = "stop"
-	const START string = "start"
+func (u *RegionSummary) Prompt(instances []Instance, action string) []Instance {
+	const (
+		STOP  = "stop"
+		START = "start"
+	)
 	for _, instance := range u.Instances {
 		switch action {
 		case STOP:
@@ -140,13 +137,20 @@ func (u RegionSummary) Prompt(instances []Instance, action string) ([]Instance) 
 	return instances
 }
 
-
+// Helper function to extract instance IDs from a slice of instances
+func IDs(instances []Instance) []string {
+	ids := make([]string, len(instances))
+	for i, instance := range instances {
+		ids[i] = instance.ID
+	}
+	return ids
+}
 
 func WriteTable(data []Instance) {
 	var header []string
 	var headerColors []tablewriter.Colors
 
-	table := tablewriter.NewWriter(os.Stdout) 
+	table := tablewriter.NewWriter(os.Stdout)
 
 	structFields := reflect.VisibleFields(reflect.TypeOf(data[0]))
 	for _, f := range structFields {
@@ -182,7 +186,7 @@ func WriteTable(data []Instance) {
 				rowColor = append(rowColor, tablewriter.Colors{})
 			}
 		}
-		table.Rich(row,rowColor)
+		table.Rich(row, rowColor)
 	}
 
 	table.Render()

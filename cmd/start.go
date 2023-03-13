@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 
@@ -66,21 +67,18 @@ func startStop(instances []string, action string) {
 	// determine the region the instance is located in
 	regCheck := len(regions)
 	var accSum aws.AccountSummary = getAccountSummary(regions, tags)
-	//determine if user included regions tag
-	//PLEASE NOTE: CODE BLOCK 71-75 MIGHT CHANGE DEPENDING ON USER REQUIREMENTS
-	if regCheck > 0 && len(instances) == 0 {
-		//if user included regions tag prompt the user for confirmation
-		insIDs := accSum.Prompt(action)
-		instances = insIDs
-	}
-	//preprocessing is done to filter and group the instances by the region
-	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
+	var wg sync.WaitGroup
 	var region string
 	var err error
+	//preprocessing is done to filter and group the instances by the region
+	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
 	regionMap := make(map[string][]string)
-	if regCheck == 1 {
-		region = regions[0]
-		regionMap[region] = append(regionMap[region], instances...)
+	//determine if user included regions tag
+	if regCheck > 0 {
+		//if user included regions tag prompt the user for confirmation
+		if len(instances) == 0 {
+			accSum.Prompt(action, &regionMap)
+		}
 	} else {
 		for _, instanceID := range instances {
 			region, err = aws.GetInstanceRegion(accSum, instanceID)
@@ -92,29 +90,35 @@ func startStop(instances []string, action string) {
 			}
 		}
 	}
-	for key, instanceSlice := range regionMap {
-		state, err := aws.StartStopInstance(key, action, instanceSlice)
-		if err != nil {
-			fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceSlice, region, err)
-			return
-		}
-		for _, stateChange := range state {
-			if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
-				fmt.Printf(
-					"Instance %s was already in a %s state.\n",
-					*stateChange.InstanceId,
-					stateChange.PreviousState.Name,
-				)
-			} else {
-				fmt.Printf(
-					"Instance %s state changed from %s to %s.\n",
-					*stateChange.InstanceId,
-					stateChange.PreviousState.Name,
-					stateChange.CurrentState.Name,
-				)
+	//initialised go routine for parallel api calls to increase speed
+	for region, instanceSlice := range regionMap {
+		wg.Add(1)
+		go func(region string, instanceSlice []string) {
+			defer wg.Done()
+			state, err := aws.StartStopInstance(region, action, instanceSlice)
+			if err != nil {
+				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceSlice, region, err)
+				return
 			}
-		}
+			for _, stateChange := range state {
+				if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
+					fmt.Printf(
+						"Instance %s was already in a %s state.\n",
+						*stateChange.InstanceId,
+						stateChange.PreviousState.Name,
+					)
+				} else {
+					fmt.Printf(
+						"Instance %s state changed from %s to %s.\n",
+						*stateChange.InstanceId,
+						stateChange.PreviousState.Name,
+						stateChange.CurrentState.Name,
+					)
+				}
+			}
+		}(region, instanceSlice)
 	}
+	wg.Wait()
 }
 
 func init() {
