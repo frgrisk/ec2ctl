@@ -50,13 +50,14 @@ func (u AccountSummary) Prompt(action string, regionMap *map[string][]string) {
 	}
 	//print labels onto terminal and scan terminal for input
 	if len(instances) == 0 {
-		fmt.Print(errLabel)
+		fmt.Println(errLabel)
+		return
 	} else {
 		fmt.Println(questionLabel)
 		WriteTable(instances)
 		fmt.Println(confirmationLabel)
+		fmt.Scanln(&s)
 	}
-	fmt.Scanln(&s)
 	//if user acknowledges, return instanceIDs associated
 	if s == "Y" {
 		*regionMap = regionTmp

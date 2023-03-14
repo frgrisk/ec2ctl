@@ -66,7 +66,8 @@ func startStop(instances []string, action string) {
 	// If a single region is not specified, query the instances in all regions and
 	// determine the region the instance is located in
 	regCheck := len(regions)
-	var accSum aws.AccountSummary = getAccountSummary(regions, tags)
+	var accSumRegions aws.AccountSummary
+	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
 	var region string
 	var err error
@@ -75,11 +76,11 @@ func startStop(instances []string, action string) {
 	regionMap := make(map[string][]string)
 	//determine if user included regions tag
 	if regCheck > 0 {
-		//if user included regions tag prompt the user for confirmation
-		if len(instances) == 0 {
-			accSum.Prompt(action, &regionMap)
-		}
-	} else {
+		accSumRegions = getAccountSummary(regions, tags)
+		accSumRegions.Prompt(action, &regionMap)
+	}
+	if len(instances) > 0 {
+		accSum = getAccountSummary([]string{}, tags)
 		for _, instanceID := range instances {
 			region, err = aws.GetInstanceRegion(accSum, instanceID)
 			if err != nil {
