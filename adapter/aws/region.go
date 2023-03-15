@@ -61,6 +61,8 @@ func (u AccountSummary) Prompt(action string, regionMap *map[string][]string) {
 	//if user acknowledges, return instanceIDs associated
 	if s == "Y" {
 		*regionMap = regionTmp
+	} else {
+		*regionMap = make(map[string][]string)
 	}
 }
 

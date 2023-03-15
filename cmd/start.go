@@ -75,10 +75,6 @@ func startStop(instances []string, action string) {
 	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
 	regionMap := make(map[string][]string)
 	//determine if user included regions tag
-	if regCheck > 0 {
-		accSumRegions = getAccountSummary(regions, tags)
-		accSumRegions.Prompt(action, &regionMap)
-	}
 	if len(instances) > 0 {
 		accSum = getAccountSummary([]string{}, tags)
 		for _, instanceID := range instances {
@@ -90,6 +86,10 @@ func startStop(instances []string, action string) {
 				regionMap[region] = append(regionMap[region], instanceID)
 			}
 		}
+	}
+	if regCheck > 0 {
+		accSumRegions = getAccountSummary(regions, tags)
+		accSumRegions.Prompt(action, &regionMap)
 	}
 	//initialised go routine for parallel api calls to increase speed
 	for region, instanceSlice := range regionMap {
