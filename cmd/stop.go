@@ -33,9 +33,9 @@ var stopCmd = &cobra.Command{
 	Use:   "stop INSTANCE-ID [INSTANCE-ID...]",
 	Short: "Stop one or more instances",
 	Long:  `This command starts the specified instance(s).`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		return validateInstanceArgs(args)
-	},
+	// Args: func(cmd *cobra.Command, args []string) error {
+	// 	return validateInstanceArgs(args)
+	// },
 	Run: func(cmd *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStop)
 	},

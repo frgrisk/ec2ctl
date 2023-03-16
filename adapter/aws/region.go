@@ -34,38 +34,62 @@ func (u AccountSummary) Print() {
 }
 
 // Prompts user for confirmation
-func (u AccountSummary) Prompt(action string, regionMap *map[string][]string) {
-	instances := []Instance{}
+func (u AccountSummary) Prompt(action string) []RegionSummary {
+	var regions []RegionSummary
 	var s string
-	regionTmp := make(map[string][]string)
-	questionLabel := "\nThis command will " + action + " the following running instances matching the filter:\n"
+
+	questionLabel := "\n" + "This command will " + action + " the following running instances matching the filter:\n"
 	confirmationLabel := "\nWould you like to proceed? [Y/n]"
 	errLabel := "No instances are available for " + action + " command"
-	for _, regionSummary := range u {
-		filteredInstances := regionSummary.Prompt([]Instance{}, action)
-		instances = append(instances, filteredInstances...)
-		if len(filteredInstances) > 0 {
-			regionTmp[regionSummary.Region] = append(regionTmp[regionSummary.Region], IDs(filteredInstances)...)
-		}
+	for _, regionSum := range u {
+		regions = regionSum.Prompt(regions, action)
 	}
+
 	//print labels onto terminal and scan terminal for input
-	if len(instances) == 0 {
-		fmt.Println(errLabel)
-		return
+	if len(regions) == 0 {
+		fmt.Print(errLabel)
 	} else {
 		fmt.Println(questionLabel)
-		WriteTable(instances)
+		for _, region := range regions {
+			region.Print()
+		}
+
 		fmt.Println(confirmationLabel)
-		fmt.Scanln(&s)
 	}
+
+	fmt.Scanln(&s)
 	//if user acknowledges, return instanceIDs associated
 	if s == "Y" {
-		*regionMap = regionTmp
-	} else {
-		*regionMap = make(map[string][]string)
+		return regions
 	}
+	//else, return empty
+	return []RegionSummary{}
 }
 
+
+func (u RegionSummary) Prompt(regions []RegionSummary, action string) []RegionSummary{
+	const (
+		STOP  = "stop"
+		START = "start"
+	)
+	var instances []Instance;
+	for _, instance := range u.Instances {
+		switch action {
+		case STOP:
+			if instance.Status == types.InstanceStateNameRunning {
+				instances = append(instances, instance)
+			}
+		case START:
+			if instance.Status == types.InstanceStateNameStopped {
+				instances = append(instances, instance)
+			}
+		}
+	}
+	if len(instances) > 0{
+		regions = append(regions, u) 
+	}
+	return regions
+}
 // GetInstanceRegion returns the region of an instance given an account summary
 func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	for _, region := range accSum {
@@ -120,25 +144,7 @@ func GetRegions() (regions []string) {
 	return regions
 }
 
-func (u *RegionSummary) Prompt(instances []Instance, action string) []Instance {
-	const (
-		STOP  = "stop"
-		START = "start"
-	)
-	for _, instance := range u.Instances {
-		switch action {
-		case STOP:
-			if instance.Status == types.InstanceStateNameRunning {
-				instances = append(instances, instance)
-			}
-		case START:
-			if instance.Status == types.InstanceStateNameStopped {
-				instances = append(instances, instance)
-			}
-		}
-	}
-	return instances
-}
+
 
 // Helper function to extract instance IDs from a slice of instances
 func IDs(instances []Instance) []string {

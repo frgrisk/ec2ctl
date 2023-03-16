@@ -38,9 +38,6 @@ var startCmd = &cobra.Command{
 	Use:   "start INSTANCE-ID [INSTANCE-ID...]",
 	Short: "Start one or more instances",
 	Long:  `This command starts the specified instance(s).`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		return validateInstanceArgs(args)
-	},
 	Run: func(cmd *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStart)
 	},
@@ -63,42 +60,42 @@ func validateInstanceArgs(args []string) error {
 }
 
 func startStop(instances []string, action string) {
-	// If a single region is not specified, query the instances in all regions and
-	// determine the region the instance is located in
-	regCheck := len(regions)
-	var accSumRegions aws.AccountSummary
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
-	var region string
-	var err error
+	// var err error
+
+	
+	// if len(instances) > 0 { 
+	// 	accSum = getAccountSummary([]string{}, tags)
+	// 	for _, instanceID := range instances {
+	// 		// region, err = aws.GetInstanceRegion(accSum, instanceID)
+	// 		if err != nil {
+	// 			fmt.Printf("Error enountered looking up region for instance %q: %s\n", instanceID, err)
+	// 			return
+	// 		} else {
+	// 			regionMap[region] = append(regionMap[region], instanceID)
+	// 		}
+	// 	}
+	// }
+
 	//preprocessing is done to filter and group the instances by the region
 	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
-	regionMap := make(map[string][]string)
-	//determine if user included regions tag
-	if len(instances) > 0 {
-		accSum = getAccountSummary([]string{}, tags)
-		for _, instanceID := range instances {
-			region, err = aws.GetInstanceRegion(accSum, instanceID)
-			if err != nil {
-				fmt.Printf("Error enountered looking up region for instance %q: %s\n", instanceID, err)
-				return
-			} else {
-				regionMap[region] = append(regionMap[region], instanceID)
-			}
-		}
-	}
-	if regCheck > 0 {
-		accSumRegions = getAccountSummary(regions, tags)
-		accSumRegions.Prompt(action, &regionMap)
-	}
+	accSum = getAccountSummary(regions, tags)
+	regionSums := accSum.Prompt(action)
+
 	//initialised go routine for parallel api calls to increase speed
-	for region, instanceSlice := range regionMap {
+	for _, regionSum := range regionSums{
 		wg.Add(1)
-		go func(region string, instanceSlice []string) {
+		var instanceIDs []string
+		for _,instance := range regionSum.Instances {
+			instanceIDs = append(instanceIDs, instance.ID)
+		}
+		region := regionSum.Region;
+		go func(region string, instanceIDs []string) {
 			defer wg.Done()
-			state, err := aws.StartStopInstance(region, action, instanceSlice)
+			state, err := aws.StartStopInstance(region, action, instanceIDs)
 			if err != nil {
-				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceSlice, region, err)
+				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceIDs, region, err)
 				return
 			}
 			for _, stateChange := range state {
@@ -117,7 +114,7 @@ func startStop(instances []string, action string) {
 					)
 				}
 			}
-		}(region, instanceSlice)
+		}(region, instanceIDs)
 	}
 	wg.Wait()
 }
