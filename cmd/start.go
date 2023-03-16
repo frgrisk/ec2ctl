@@ -46,7 +46,7 @@ var startCmd = &cobra.Command{
 	# Start specific regions
 	ec2ctl start --regions us-east-1,ap-southeast-1
 	# Start specific tags
-	ec2ctl start --tag Environment:dev,Name:my-server.com
+	ec2ctl start --tag Environment:dev
 	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStart)
@@ -72,26 +72,15 @@ func validateInstanceArgs(args []string) error {
 func startStop(instances []string, action string) {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
-	// var err error	
-	// if len(instances) > 0 { 
-	// 	accSum = getAccountSummary([]string{}, tags)
-	// 	for _, instanceID := range instances {
-	// 		// region, err = aws.GetInstanceRegion(accSum, instanceID)
-	// 		if err != nil {
-	// 			fmt.Printf("Error enountered looking up region for instance %q: %s\n", instanceID, err)
-	// 			return
-	// 		} else {
-	// 			regionMap[region] = append(regionMap[region], instanceID)
-	// 		}
-	// 	}
-	// }
 
-	//preprocessing is done to filter and group the instances by the region
-	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
-	accSum = getAccountSummary(regions, tags, action)
+	// Filter instances by region, tags, and current status
+	accSum = getAccountSummary(regions, tags, action, instances)
+	// Show confirmation prompt to user, showing list of matched instances
 	accSum = accSum.Prompt(action)
 
-	//initialised go routine for parallel api calls to increase speed
+	// Preprocessing is done to filter and group the instances by the region
+	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
+	// Initialised go routine for parallel api calls to increase speed
 	for _, regionSum := range accSum{
 		wg.Add(1)
 		var instanceIDs []string

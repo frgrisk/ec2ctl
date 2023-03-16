@@ -59,7 +59,7 @@ func init() {
 
 func modifyInstances(cmd *cobra.Command, instances []string) {
 	// Get account summary based on regions and tags specified
-	accSum := getAccountSummary(regions, tags, "")
+	accSum := getAccountSummary(regions, tags, "", instances)
 
 	instanceMap := make(map[string]*aws.Instance, 0)
 

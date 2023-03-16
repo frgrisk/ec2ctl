@@ -19,6 +19,8 @@ const (
 	InstanceStart string = "start"
 	// InstanceStop is the action to stop an instance
 	InstanceStop string = "stop"
+	// InstanceStatus is the action to query status of instance
+	InstanceStatus string = "status"
 	// InstanceHibernate is the action to hibernate an instance
 	InstanceHibernate string = "hibernate"
 )
@@ -42,7 +44,7 @@ type Instance struct {
 
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(region string, tags map[string]string, action string, c chan RegionSummary) {
+func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]string, action string, instanceIDs []string) {
 	ctx := context.TODO()
 	var rSummary RegionSummary
 	rSummary.Region = region
@@ -59,11 +61,11 @@ func GetDeployedInstances(region string, tags map[string]string, action string, 
 
 	svc := ec2.NewFromConfig(cfg)
 
-	//Filtering process using tags and actions
+	//Filtering process by state, tags, and instanceIDs
 	filters := []types.Filter{}
-	var stateFilter types.Filter
 
-	//Filter by action type
+	//Filter by state type
+	var stateFilter types.Filter
 	switch action {
 	case InstanceStop:
 		stateFilter = types.Filter{
@@ -103,6 +105,15 @@ func GetDeployedInstances(region string, tags map[string]string, action string, 
 			},
 		}
 		filters = append(filters, newTagFilter)
+	}
+
+	//Filter by instanceIDs
+	if len(instanceIDs) != 0 {
+		idFilter := types.Filter{
+			Name: aws.String("instance-id"),
+			Values: instanceIDs,
+		}
+		filters = append(filters, idFilter)
 	}
 
 	input := &ec2.DescribeInstancesInput{
