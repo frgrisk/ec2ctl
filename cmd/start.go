@@ -35,9 +35,19 @@ import (
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:   "start INSTANCE-ID [INSTANCE-ID...]",
+	Use:   "start",
 	Short: "Start one or more instances",
-	Long:  `This command starts the specified instance(s).`,
+	Long:  `This command lists all matching stopped instance(s), and gives option to
+	starts the matched instance(s).
+
+	Examples:
+	# Start all regions
+	ec2ctl start
+	# Start specific regions
+	ec2ctl start --regions us-east-1,ap-southeast-1
+	# Start specific tags
+	ec2ctl start --tag Environment:dev,Name:my-server.com
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStart)
 	},
@@ -62,9 +72,7 @@ func validateInstanceArgs(args []string) error {
 func startStop(instances []string, action string) {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
-	// var err error
-
-	
+	// var err error	
 	// if len(instances) > 0 { 
 	// 	accSum = getAccountSummary([]string{}, tags)
 	// 	for _, instanceID := range instances {
@@ -80,11 +88,11 @@ func startStop(instances []string, action string) {
 
 	//preprocessing is done to filter and group the instances by the region
 	//The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
-	accSum = getAccountSummary(regions, tags)
-	regionSums := accSum.Prompt(action)
+	accSum = getAccountSummary(regions, tags, action)
+	accSum = accSum.Prompt(action)
 
 	//initialised go routine for parallel api calls to increase speed
-	for _, regionSum := range regionSums{
+	for _, regionSum := range accSum{
 		wg.Add(1)
 		var instanceIDs []string
 		for _,instance := range regionSum.Instances {

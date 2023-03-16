@@ -38,17 +38,17 @@ var statusCmd = &cobra.Command{
 	Short: "List available instances and their statuses",
 	Long: `This command lists all available instances and their statuses.
 
-Examples:
-  # Query all regions
-  ec2ctl status
-  # Query specific regions
-  ec2ctl status --regions us-east-1,ap-southeast-1
-  # Query specific tags
-  ec2ctl status --tag Environment:dev,Name:my-server.com
-`,
+	Examples:
+	# Query all regions
+	ec2ctl status
+	# Query specific regions
+	ec2ctl status --regions us-east-1,ap-southeast-1
+	# Query specific tags
+	ec2ctl status --tag Environment:dev,Name:my-server.com
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Get account summary based on regions and tags specified
-		accSum := getAccountSummary(regions, tags)
+		accSum := getAccountSummary(regions, tags, "")
 
 		switch output {
 		case types.JSON:
@@ -64,14 +64,14 @@ Examples:
 	},
 }
 
-func getAccountSummary(regions []string, tags map[string]string) (accSum aws.AccountSummary) {
+func getAccountSummary(regions []string, tags map[string]string, action string) (accSum aws.AccountSummary) {
 	if len(regions) == 0 {
 		regions = aws.GetRegions()
 	}
 
 	c := make(chan aws.RegionSummary)
 	for _, r := range regions {
-		go aws.GetDeployedInstances(r, tags, c)
+		go aws.GetDeployedInstances(r, tags, action, c)
 	}
 	var regSum aws.RegionSummary
 

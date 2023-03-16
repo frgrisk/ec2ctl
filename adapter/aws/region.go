@@ -34,62 +34,34 @@ func (u AccountSummary) Print() {
 }
 
 // Prompts user for confirmation
-func (u AccountSummary) Prompt(action string) []RegionSummary {
-	var regions []RegionSummary
+func (u AccountSummary) Prompt(action string) AccountSummary {
 	var s string
 
 	questionLabel := "\n" + "This command will " + action + " the following running instances matching the filter:\n"
 	confirmationLabel := "\nWould you like to proceed? [Y/n]"
-	errLabel := "No instances are available for " + action + " command"
-	for _, regionSum := range u {
-		regions = regionSum.Prompt(regions, action)
-	}
+	errLabel := "No instances are available for " + action + " command."
 
 	//print labels onto terminal and scan terminal for input
-	if len(regions) == 0 {
+	if len(u) == 0 {
 		fmt.Print(errLabel)
+		os.Exit(0)
 	} else {
 		fmt.Println(questionLabel)
-		for _, region := range regions {
-			region.Print()
+		for _, regionSum := range u {
+			regionSum.Print()
 		}
-
 		fmt.Println(confirmationLabel)
 	}
 
 	fmt.Scanln(&s)
-	//if user acknowledges, return instanceIDs associated
+	//if user acknowledges, return account summary associated
 	if s == "Y" {
-		return regions
+		return u
 	}
 	//else, return empty
-	return []RegionSummary{}
+	return AccountSummary{}
 }
 
-
-func (u RegionSummary) Prompt(regions []RegionSummary, action string) []RegionSummary{
-	const (
-		STOP  = "stop"
-		START = "start"
-	)
-	var instances []Instance;
-	for _, instance := range u.Instances {
-		switch action {
-		case STOP:
-			if instance.Status == types.InstanceStateNameRunning {
-				instances = append(instances, instance)
-			}
-		case START:
-			if instance.Status == types.InstanceStateNameStopped {
-				instances = append(instances, instance)
-			}
-		}
-	}
-	if len(instances) > 0{
-		regions = append(regions, u) 
-	}
-	return regions
-}
 // GetInstanceRegion returns the region of an instance given an account summary
 func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	for _, region := range accSum {

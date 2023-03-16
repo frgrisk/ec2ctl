@@ -42,8 +42,10 @@ type Instance struct {
 
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(region string, tags map[string]string, c chan RegionSummary) {
+func GetDeployedInstances(region string, tags map[string]string, action string, c chan RegionSummary) {
 	ctx := context.TODO()
+	var rSummary RegionSummary
+	rSummary.Region = region
 
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
@@ -57,24 +59,42 @@ func GetDeployedInstances(region string, tags map[string]string, c chan RegionSu
 
 	svc := ec2.NewFromConfig(cfg)
 
-	var rSummary RegionSummary
-	rSummary.Region = region
-
+	//Filtering process using tags and actions
 	filters := []types.Filter{}
+	var stateFilter types.Filter
 
-	stateFilter := types.Filter{
-		Name: aws.String("instance-state-name"),
-		Values: []string{
-			string(types.InstanceStateNamePending),
-			string(types.InstanceStateNameRunning),
-			string(types.InstanceStateNameShuttingDown),
-			string(types.InstanceStateNameStopping),
-			string(types.InstanceStateNameStopped),
-		},
+	//Filter by action type
+	switch action {
+	case InstanceStop:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNameRunning),
+			},
+		}
+	case InstanceStart:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNameStopped),
+			},
+		}
+	default:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNamePending),
+				string(types.InstanceStateNameRunning),
+				string(types.InstanceStateNameShuttingDown),
+				string(types.InstanceStateNameStopping),
+				string(types.InstanceStateNameStopped),
+			},
+		}
 	}
+
 	filters = append(filters, stateFilter)
 
-	// TODO: Add support for multiple filters
+	//Filter by tag type
 	for tagKey, tagVal := range tags {
 		newTagFilter := types.Filter{
 			Name: aws.String("tag:" + tagKey),
