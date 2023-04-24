@@ -19,9 +19,12 @@ const (
 	InstanceStart string = "start"
 	// InstanceStop is the action to stop an instance
 	InstanceStop string = "stop"
+	// InstanceStatus is the action to query status of instance
+	InstanceStatus string = "status"
 	// InstanceHibernate is the action to hibernate an instance
 	InstanceHibernate string = "hibernate"
 )
+
 
 // Instance is a struct to hold instance characteristics
 type Instance struct {
@@ -38,10 +41,13 @@ type Instance struct {
 	AZ               string
 }
 
-// GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(region string, c chan RegionSummary) {
 
+
+// GetDeployedInstances retrieves the status of all deployed instances in a given region
+func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]string, action string, instanceIDs []string) {
 	ctx := context.TODO()
+	var rSummary RegionSummary
+	rSummary.Region = region
 
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
@@ -55,27 +61,63 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 
 	svc := ec2.NewFromConfig(cfg)
 
-	var rSummary RegionSummary
-	rSummary.Region = region
+	//Filtering process by state, tags, and instanceIDs
+	filters := []types.Filter{}
 
-	// TODO: Add support for multiple filters
-	tagFilter := types.Filter{}
-	stateFilter := types.Filter{
-		Name: aws.String("instance-state-name"),
-		Values: []string{
-			string(types.InstanceStateNamePending),
-			string(types.InstanceStateNameRunning),
-			string(types.InstanceStateNameShuttingDown),
-			string(types.InstanceStateNameStopping),
-			string(types.InstanceStateNameStopped),
-		},
+	//Filter by state type
+	var stateFilter types.Filter
+	switch action {
+	case InstanceStop:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNameRunning),
+			},
+		}
+	case InstanceStart:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNameStopped),
+			},
+		}
+	default:
+		stateFilter = types.Filter{
+			Name: aws.String("instance-state-name"),
+			Values: []string{
+				string(types.InstanceStateNamePending),
+				string(types.InstanceStateNameRunning),
+				string(types.InstanceStateNameShuttingDown),
+				string(types.InstanceStateNameStopping),
+				string(types.InstanceStateNameStopped),
+			},
+		}
+	}
+
+	filters = append(filters, stateFilter)
+
+	//Filter by tag type
+	for tagKey, tagVal := range tags {
+		newTagFilter := types.Filter{
+			Name: aws.String("tag:" + tagKey),
+			Values: []string{
+				string(tagVal),
+			},
+		}
+		filters = append(filters, newTagFilter)
+	}
+
+	//Filter by instanceIDs
+	if len(instanceIDs) != 0 {
+		idFilter := types.Filter{
+			Name: aws.String("instance-id"),
+			Values: instanceIDs,
+		}
+		filters = append(filters, idFilter)
 	}
 
 	input := &ec2.DescribeInstancesInput{
-		Filters: []types.Filter{
-			tagFilter,
-			stateFilter,
-		},
+		Filters: filters,
 	}
 
 	result, err := svc.DescribeInstances(ctx, input)
@@ -165,10 +207,8 @@ func GetDeployedInstances(region string, c chan RegionSummary) {
 }
 
 // StartStopInstance starts or stops an AWS Instance
-func StartStopInstance(region string, action string, instanceID string) ([]types.InstanceStateChange, error) {
-
+func StartStopInstance(region string, action string, instanceIDs []string) ([]types.InstanceStateChange, error) {
 	ctx := context.TODO()
-
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
 	// environment and shared configuration values.
@@ -186,10 +226,8 @@ func StartStopInstance(region string, action string, instanceID string) ([]types
 		// We set DryRun to true to check to see if the instance exists, and we have the
 		// necessary permissions to monitor the instance.
 		input := &ec2.StartInstancesInput{
-			InstanceIds: []string{
-				instanceID,
-			},
-			DryRun: aws.Bool(true),
+			InstanceIds: instanceIDs,
+			DryRun:      aws.Bool(true),
 		}
 		result, err := svc.StartInstances(ctx, input)
 
@@ -213,10 +251,8 @@ func StartStopInstance(region string, action string, instanceID string) ([]types
 	case InstanceStop, InstanceHibernate:
 		// Turn instances off
 		input := &ec2.StopInstancesInput{
-			InstanceIds: []string{
-				instanceID,
-			},
-			DryRun: aws.Bool(true),
+			InstanceIds: instanceIDs,
+			DryRun:      aws.Bool(true),
 		}
 		if action == InstanceHibernate {
 			input.Hibernate = aws.Bool(true)

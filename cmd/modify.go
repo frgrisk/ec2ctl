@@ -58,8 +58,8 @@ func init() {
 }
 
 func modifyInstances(cmd *cobra.Command, instances []string) {
-	// If a region subset is not specified, query all regions
-	accSum := getAccountSummary(regions)
+	// Get account summary based on regions and tags specified
+	accSum := getAccountSummary(regions, tags, "", instances)
 
 	instanceMap := make(map[string]*aws.Instance, 0)
 

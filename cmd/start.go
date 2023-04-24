@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 
@@ -34,19 +35,26 @@ import (
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:   "start INSTANCE-ID [INSTANCE-ID...]",
+	Use:   "start",
 	Short: "Start one or more instances",
-	Long:  `This command starts the specified instance(s).`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		return validateInstanceArgs(args)
-	},
+	Long:  `This command lists all matching stopped instance(s), and gives option to
+	starts the matched instance(s).
+
+	Examples:
+	# Start all regions
+	ec2ctl start
+	# Start specific regions
+	ec2ctl start --regions us-east-1,ap-southeast-1
+	# Start specific tags
+	ec2ctl start --tag Environment:dev
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStart)
 	},
 }
 
 func validateInstanceArgs(args []string) error {
-	if len(args) < 1 {
+	if len(args) < 1 && len(regions) == 0 {
 		return errors.New("at least one instance ID is required")
 	}
 	for _, arg := range args {
@@ -62,47 +70,50 @@ func validateInstanceArgs(args []string) error {
 }
 
 func startStop(instances []string, action string) {
-	// If a single region is not specified, query the instances in all regions and
-	// determine the region the instance is located in
 	var accSum aws.AccountSummary
-	if len(regions) != 1 {
-		accSum = getAccountSummary(regions)
-	}
-	for _, instanceID := range instances {
-		var region string
-		var err error
-		if len(regions) == 1 {
-			region = regions[0]
-		} else {
-			region, err = aws.GetInstanceRegion(accSum, instanceID)
+	var wg sync.WaitGroup
+
+	// Filter instances by region, tags, and current status
+	accSum = getAccountSummary(regions, tags, action, instances)
+	// Show confirmation prompt to user, showing list of matched instances
+	accSum = accSum.Prompt(action)
+
+	// Preprocessing is done to filter and group the instances by the region
+	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
+	// Initialised go routine for parallel api calls to increase speed
+	for _, regionSum := range accSum{
+		wg.Add(1)
+		var instanceIDs []string
+		for _,instance := range regionSum.Instances {
+			instanceIDs = append(instanceIDs, instance.ID)
+		}
+		region := regionSum.Region;
+		go func(region string, instanceIDs []string) {
+			defer wg.Done()
+			state, err := aws.StartStopInstance(region, action, instanceIDs)
 			if err != nil {
-				fmt.Printf("Error enountered looking up region for instance %q: %s\n", instanceID, err)
+				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceIDs, region, err)
 				return
 			}
-		}
-		// TODO: Start all instances in a given region in one API call
-		state, err := aws.StartStopInstance(region, action, instanceID)
-		if err != nil {
-			fmt.Printf("Failed to %s instance %q in region %q: %v\n", action, instanceID, region, err)
-			return
-		}
-		for _, stateChange := range state {
-			if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
-				fmt.Printf(
-					"Instance %s was already in a %s state.\n",
-					*stateChange.InstanceId,
-					stateChange.PreviousState.Name,
-				)
-			} else {
-				fmt.Printf(
-					"Instance %s state changed from %s to %s.\n",
-					*stateChange.InstanceId,
-					stateChange.PreviousState.Name,
-					stateChange.CurrentState.Name,
-				)
+			for _, stateChange := range state {
+				if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
+					fmt.Printf(
+						"Instance %s was already in a %s state.\n",
+						*stateChange.InstanceId,
+						stateChange.PreviousState.Name,
+					)
+				} else {
+					fmt.Printf(
+						"Instance %s state changed from %s to %s.\n",
+						*stateChange.InstanceId,
+						stateChange.PreviousState.Name,
+						stateChange.CurrentState.Name,
+					)
+				}
 			}
-		}
+		}(region, instanceIDs)
 	}
+	wg.Wait()
 }
 
 func init() {

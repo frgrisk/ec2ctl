@@ -38,38 +38,45 @@ var statusCmd = &cobra.Command{
 	Short: "List available instances and their statuses",
 	Long: `This command lists all available instances and their statuses.
 
-Examples:
-  # Query all regions
-  ec2ctl status
-  # Query specific regions
-  ec2ctl status --regions us-east-1,ap-southeast-1
-`,
+	Examples:
+	# Query all regions
+	ec2ctl status
+	# Query specific regions
+	ec2ctl status --regions us-east-1,ap-southeast-1
+	# Query specific tags
+	ec2ctl status --tag Environment:dev
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// If a region subset is not specified, query all regions
-		accSum := getAccountSummary(regions)
+		// Get account summary based on regions and tags specified
+		accSum := getAccountSummary(regions, tags, aws.InstanceStatus, args)
 
-		switch output {
-		case types.JSON:
-			jsonBytes, err := json.Marshal(accSum)
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
+		if len(accSum) != 0 {
+			switch output {
+			case types.JSON:
+				jsonBytes, err := json.Marshal(accSum)
+				if err != nil {
+					fmt.Println("Error:", err)
+					return
+				}
+				fmt.Println(string(jsonBytes))
+			case types.Table:
+				accSum.Print()
 			}
-			fmt.Println(string(jsonBytes))
-		case types.Table:
-			accSum.Print()
+		} else {
+			errLabel := "No instances are available for " + aws.InstanceStatus + " command."
+			fmt.Println(errLabel)
 		}
 	},
 }
 
-func getAccountSummary(regions []string) (accSum aws.AccountSummary) {
+func getAccountSummary(regions []string, tags map[string]string, action string, instanceIDs []string) (accSum aws.AccountSummary) {
 	if len(regions) == 0 {
 		regions = aws.GetRegions()
 	}
 
 	c := make(chan aws.RegionSummary)
 	for _, r := range regions {
-		go aws.GetDeployedInstances(r, c)
+		go aws.GetDeployedInstances(c, r, tags, action, instanceIDs)
 	}
 	var regSum aws.RegionSummary
 
