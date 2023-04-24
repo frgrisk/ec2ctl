@@ -96,6 +96,7 @@ func GetRegions() (regions []string) {
 			{
 				Name: aws.String("opt-in-status"),
 				Values: []string{
+					"opted-in",
 					"opt-in-not-required",
 				},
 			},
