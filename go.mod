@@ -3,7 +3,7 @@ module github.com/frgrisk/ec2ctl
 go 1.17
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.24.0
+	github.com/aws/aws-sdk-go-v2 v1.24.1
 	github.com/aws/aws-sdk-go-v2/config v1.26.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.138.1
 	github.com/aws/smithy-go v1.19.0
