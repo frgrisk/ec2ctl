@@ -1,0 +1,44 @@
+linters:
+  enable:
+    - staticcheck
+    - revive
+    - gofmt
+    - tenv
+    - misspell
+    - asciicheck
+    - gosec
+    - gocritic
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+      - opinionated
+    disabled-checks:
+      - emptyStringTest
+      - filepathJoin
+      - importShadow
+      - nestingReduce
+      - octalLiteral
+      - paramTypeCombine
+      - sloppyReassign
+      - stringXbytes
+      - tooManyResultsChecker
+      - unnamedResult
+      # Should consider enabling these sooner than later
+      - commentedOutCode
+      - deferInLoop
+      - hugeParam
+      - nilValReturn
+      - preferDecodeRune
+      - rangeValCopy
+      - regexpSimplify
+      - returnAfterHttpError
+      - sprintfQuotedString
+      - whyNoLint
+
+output:
+  format: github-actions
