@@ -35,7 +35,7 @@ var modifyCmd = &cobra.Command{
 	Use:   "modify INSTANCE-ID [INSTANCE-ID...]",
 	Short: "Modify one or more instances",
 	Long:  `This command modifies the specified instance(s).`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		return validateInstanceArgs(args)
 	},
 	Example: "ec2ctl modify --type r6g.xlarge i-04f95703166d053ed",
@@ -54,7 +54,7 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	modifyCmd.Flags().String("type", "", "Instance type to change the instance(s) to.")
-	modifyCmd.MarkFlagRequired("type")
+	_ = modifyCmd.MarkFlagRequired("type")
 }
 
 func modifyInstances(cmd *cobra.Command, instances []string) {
@@ -68,10 +68,10 @@ func modifyInstances(cmd *cobra.Command, instances []string) {
 	}
 
 	for _, r := range accSum {
-		for _, i := range r.Instances {
+		for n, i := range r.Instances {
 			_, ok := instanceMap[i.ID]
 			if ok {
-				instanceMap[i.ID] = &i
+				instanceMap[i.ID] = &r.Instances[n]
 			}
 		}
 	}

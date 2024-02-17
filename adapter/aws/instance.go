@@ -23,8 +23,9 @@ const (
 	InstanceStatus string = "status"
 	// InstanceHibernate is the action to hibernate an instance
 	InstanceHibernate string = "hibernate"
+	// DryRunOperation is the error code for dry run operation
+	DryRunOperation string = "DryRunOperation"
 )
-
 
 // Instance is a struct to hold instance characteristics
 type Instance struct {
@@ -35,13 +36,11 @@ type Instance struct {
 	Lifecycle        string
 	Environment      string
 	IP               string
-	Hibernation      bool
 	SpotInstanceType types.SpotInstanceType
 	Region           string
 	AZ               string
+	Hibernation      bool
 }
-
-
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
 func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]string, action string, instanceIDs []string) {
@@ -61,10 +60,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 
 	svc := ec2.NewFromConfig(cfg)
 
-	//Filtering process by state, tags, and instanceIDs
-	filters := []types.Filter{}
-
-	//Filter by state type
+	// Filter by state type
 	var stateFilter types.Filter
 	switch action {
 	case InstanceStop:
@@ -94,23 +90,23 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		}
 	}
 
-	filters = append(filters, stateFilter)
+	filters := []types.Filter{stateFilter}
 
-	//Filter by tag type
+	// Filter by tag type
 	for tagKey, tagVal := range tags {
 		newTagFilter := types.Filter{
 			Name: aws.String("tag:" + tagKey),
 			Values: []string{
-				string(tagVal),
+				tagVal,
 			},
 		}
 		filters = append(filters, newTagFilter)
 	}
 
-	//Filter by instanceIDs
+	// Filter by instanceIDs
 	if len(instanceIDs) != 0 {
 		idFilter := types.Filter{
-			Name: aws.String("instance-id"),
+			Name:   aws.String("instance-id"),
 			Values: instanceIDs,
 		}
 		filters = append(filters, idFilter)
@@ -171,11 +167,8 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 			}
 
 			if inst.StateReason != nil {
-				switch *inst.StateReason.Code {
-				case "Client.UserInitiatedHibernate":
-					if inst.State.Name == types.InstanceStateNameStopped {
-						instance.Status = "hibernated"
-					}
+				if *inst.StateReason.Code == "Client.UserInitiatedHibernate" && inst.State.Name == types.InstanceStateNameStopped {
+					instance.Status = "hibernated"
 				}
 			}
 
@@ -230,13 +223,12 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 			DryRun:      aws.Bool(true),
 		}
 		result, err := svc.StartInstances(ctx, input)
-
 		// If the error code is `DryRunOperation` it means we have the necessary
 		// permissions to Start this instance
 		if err != nil {
 			var ae smithy.APIError
 			if errors.As(err, &ae) {
-				if ae.ErrorCode() == "DryRunOperation" {
+				if ae.ErrorCode() == DryRunOperation {
 					// Let's now set dry run to be false. This will allow us to start the instances
 					input.DryRun = aws.Bool(false)
 					result, err = svc.StartInstances(ctx, input)
@@ -261,7 +253,7 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 		if err != nil {
 			var ae smithy.APIError
 			if errors.As(err, &ae) {
-				if ae.ErrorCode() == "DryRunOperation" {
+				if ae.ErrorCode() == DryRunOperation {
 					// Let's now set dry run to be false. This will allow us to start the instances
 					input.DryRun = aws.Bool(false)
 					result, err = svc.StopInstances(ctx, input)
@@ -279,7 +271,6 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 
 // ModifyInstanceType modifies an AWS Instance type
 func ModifyInstanceType(region string, instanceType string, instanceID string) (err error) {
-
 	ctx := context.TODO()
 
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
@@ -294,7 +285,7 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 	// Create new EC2 client
 	svc := ec2.NewFromConfig(cfg)
 
-	//This modifies the instance type of the specified instance
+	// This modifies the instance type of the specified instance
 	input := &ec2.ModifyInstanceAttributeInput{
 		InstanceId: aws.String(instanceID),
 		InstanceType: &types.AttributeValue{
@@ -304,13 +295,12 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 	}
 
 	_, err = svc.ModifyInstanceAttribute(ctx, input)
-
 	// If the error code is `DryRunOperation` it means we have the necessary
 	// permissions to Start this instance
 	if err != nil {
 		var ae smithy.APIError
 		if errors.As(err, &ae) {
-			if ae.ErrorCode() == "DryRunOperation" {
+			if ae.ErrorCode() == DryRunOperation {
 				// Let's now set dry run to be false. This will allow us to start the instances
 				input.DryRun = aws.Bool(false)
 				_, err = svc.ModifyInstanceAttribute(ctx, input)
@@ -322,7 +312,6 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 }
 
 func TerminateInstances(region string, instances []string) (err error) {
-
 	ctx := context.TODO()
 
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement

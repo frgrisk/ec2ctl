@@ -37,7 +37,7 @@ import (
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start one or more instances",
-	Long:  `This command lists all matching stopped instance(s), and gives option to
+	Long: `This command lists all matching stopped instance(s), and gives option to
 	starts the matched instance(s).
 
 	Examples:
@@ -48,7 +48,7 @@ var startCmd = &cobra.Command{
 	# Start specific tags
 	ec2ctl start --tag Environment:dev
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStart)
 	},
 }
@@ -57,11 +57,9 @@ func validateInstanceArgs(args []string) error {
 	if len(args) < 1 && len(regions) == 0 {
 		return errors.New("at least one instance ID is required")
 	}
+	re := regexp.MustCompile("^i-[a-z|0-9]{8}|[a-z|0-9]{17}")
 	for _, arg := range args {
-		matched, err := regexp.MatchString("^i-[a-z|0-9]{8}|[a-z|0-9]{17}", arg)
-		if err != nil {
-			return err
-		}
+		matched := re.MatchString(arg)
 		if !matched || (len(arg) != 10 && len(arg) != 19) {
 			return fmt.Errorf("%q is not a valid instance id", arg)
 		}
@@ -79,15 +77,15 @@ func startStop(instances []string, action string) {
 	accSum = accSum.Prompt(action)
 
 	// Preprocessing is done to filter and group the instances by the region
-	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of avaiable regions
+	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of available regions
 	// Initialised go routine for parallel api calls to increase speed
-	for _, regionSum := range accSum{
+	for _, regionSum := range accSum {
 		wg.Add(1)
 		var instanceIDs []string
-		for _,instance := range regionSum.Instances {
+		for _, instance := range regionSum.Instances {
 			instanceIDs = append(instanceIDs, instance.ID)
 		}
-		region := regionSum.Region;
+		region := regionSum.Region
 		go func(region string, instanceIDs []string) {
 			defer wg.Done()
 			state, err := aws.StartStopInstance(region, action, instanceIDs)

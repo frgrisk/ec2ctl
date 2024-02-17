@@ -37,7 +37,7 @@ func (u AccountSummary) Print() {
 func (u AccountSummary) Prompt(action string) AccountSummary {
 	var s string
 
-	// Declare labels to print onto terminal 
+	// Declare labels to print onto terminal
 	questionLabel := "\n" + "This command will " + action + " the following running instances matching the filter:\n"
 	confirmationLabel := "\nWould you like to proceed? [Y/n]"
 	errLabel := "No instances are available for " + action + " command.\n"
@@ -46,13 +46,13 @@ func (u AccountSummary) Prompt(action string) AccountSummary {
 	if len(u) == 0 {
 		fmt.Print(errLabel)
 		os.Exit(0)
-	} else { 	// If region summary exists in account summary, means there are matching instances, return as table
-		fmt.Println(questionLabel)
-		for _, regionSum := range u {
-			regionSum.Print()
-		}
-		fmt.Println(confirmationLabel)
 	}
+	// If region summary exists in account summary, means there are matching instances, return as table
+	fmt.Println(questionLabel)
+	for _, regionSum := range u {
+		regionSum.Print()
+	}
+	fmt.Println(confirmationLabel)
 
 	// Scan terminal for input
 	fmt.Scanln(&s)
@@ -84,7 +84,6 @@ func (u RegionSummary) Print() {
 
 // GetRegions is a function to retrieve all active regions in an account
 func GetRegions() (regions []string) {
-
 	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -119,8 +118,6 @@ func GetRegions() (regions []string) {
 	return regions
 }
 
-
-
 // Helper function to extract instance IDs from a slice of instances
 func IDs(instances []Instance) []string {
 	ids := make([]string, len(instances))
@@ -131,12 +128,11 @@ func IDs(instances []Instance) []string {
 }
 
 func WriteTable(data []Instance) {
-	var header []string
-	var headerColors []tablewriter.Colors
-
 	table := tablewriter.NewWriter(os.Stdout)
 
 	structFields := reflect.VisibleFields(reflect.TypeOf(data[0]))
+	header := make([]string, 0, len(structFields))
+	headerColors := make([]tablewriter.Colors, 0, len(structFields))
 	for _, f := range structFields {
 		header = append(header, f.Name)
 		headerColors = append(headerColors, tablewriter.Colors{tablewriter.Bold})
@@ -174,5 +170,4 @@ func WriteTable(data []Instance) {
 	}
 
 	table.Render()
-
 }
