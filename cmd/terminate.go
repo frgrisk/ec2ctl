@@ -25,10 +25,11 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"github.com/frgrisk/ec2ctl/adapter/aws"
-	"github.com/spf13/cobra"
 	"os"
 	"strings"
+
+	"github.com/frgrisk/ec2ctl/adapter/aws"
+	"github.com/spf13/cobra"
 )
 
 // terminateCmd represents the terminate command
@@ -36,7 +37,7 @@ var terminateCmd = &cobra.Command{
 	Use:   "terminate INSTANCE-ID [INSTANCE-ID...]",
 	Short: "Terminate one or more instances",
 	Long:  `This command terminate one or more instances.`,
-	Args: func(cmd *cobra.Command, args []string) error {
+	Args: func(_ *cobra.Command, args []string) error {
 		return validateInstanceArgs(args)
 	},
 	Run:     terminateInstance,
@@ -52,7 +53,7 @@ func init() {
 }
 
 func terminateInstance(cmd *cobra.Command, instances []string) {
-    // Get account summary based on regions and tags specified
+	// Get account summary based on regions and tags specified
 	accSum := getAccountSummary(regions, tags, "", instances)
 
 	instanceMap := make(map[string]*aws.Instance, 0)
@@ -63,10 +64,10 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 	}
 
 	for _, r := range accSum {
-		for _, i := range r.Instances {
+		for n, i := range r.Instances {
 			_, ok := instanceMap[i.ID]
 			if ok {
-				instanceMap[i.ID] = &i
+				instanceMap[i.ID] = &r.Instances[n]
 				if _, ok := instanceRegionMap[i.Region]; !ok {
 					instanceRegionMap[i.Region] = []string{}
 				}
@@ -88,7 +89,7 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 	Enter a value: `, v, k)
 			reader := bufio.NewReader(os.Stdin)
 			text, _ := reader.ReadString('\n')
-			text = strings.Replace(text, "\n", "", -1)
+			text = strings.ReplaceAll(text, "\n", "")
 			if text != "yes" {
 				continue
 			}

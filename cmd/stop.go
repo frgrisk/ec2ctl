@@ -32,7 +32,7 @@ import (
 var stopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop one or more instances",
-	Long:  `This command lists all matching running instance(s), and gives option to
+	Long: `This command lists all matching running instance(s), and gives option to
 	stop the matched instance(s).
 
 	Examples:
@@ -43,7 +43,7 @@ var stopCmd = &cobra.Command{
 	# Stop specific tags
 	ec2ctl stop --tag Environment:dev
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		startStop(args, aws.InstanceStop)
 	},
 }

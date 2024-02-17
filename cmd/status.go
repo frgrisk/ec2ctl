@@ -46,7 +46,7 @@ var statusCmd = &cobra.Command{
 	# Query specific tags
 	ec2ctl status --tag Environment:dev
 	`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		// Get account summary based on regions and tags specified
 		accSum := getAccountSummary(regions, tags, aws.InstanceStatus, args)
 

@@ -1,15 +1,24 @@
 linters:
   enable:
-    - staticcheck
-    - revive
-    - gofmt
-    - tenv
-    - misspell
     - asciicheck
-    - gosec
     - gocritic
+    - gofmt
+    - gofumpt
+    - gosec
+    - misspell
+    - revive
+    - staticcheck
+    - tenv
+    - unconvert
+    - gomnd
+    - prealloc
+    - goconst
 
 linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - shadow
   gocritic:
     enabled-tags:
       - diagnostic
@@ -35,10 +44,6 @@ linters-settings:
       - nilValReturn
       - preferDecodeRune
       - rangeValCopy
-      - regexpSimplify
       - returnAfterHttpError
       - sprintfQuotedString
       - whyNoLint
-
-output:
-  format: github-actions
