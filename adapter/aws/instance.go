@@ -60,9 +60,6 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 
 	svc := ec2.NewFromConfig(cfg)
 
-	// Filtering process by state, tags, and instanceIDs
-	var filters []types.Filter
-
 	// Filter by state type
 	var stateFilter types.Filter
 	switch action {
@@ -93,7 +90,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		}
 	}
 
-	filters = append(filters, stateFilter)
+	filters := []types.Filter{stateFilter}
 
 	// Filter by tag type
 	for tagKey, tagVal := range tags {
