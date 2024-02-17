@@ -15,3 +15,5 @@
 vendor/
 
 ec2ctl
+
+node_modules
