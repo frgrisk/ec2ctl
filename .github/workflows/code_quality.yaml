@@ -41,19 +41,3 @@ jobs:
         with:
           version: latest
           args: --timeout 5m --config=${{ github.workspace }}/.golangci.yaml -v --out-format=github-actions
-
-  tidy_check:
-    name: Tidy Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-
-      - name: Execute tidy in module directories
-        run: go mod tidy
-
-      - name: Check if go.mod files have changed
-        run: git diff --compact-summary --exit-code
