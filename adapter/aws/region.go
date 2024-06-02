@@ -33,7 +33,7 @@ func (u AccountSummary) Print() {
 	}
 }
 
-// Prompts user for confirmation
+// Prompt prompts user for confirmation
 func (u AccountSummary) Prompt(action string) AccountSummary {
 	var s string
 
@@ -55,7 +55,11 @@ func (u AccountSummary) Prompt(action string) AccountSummary {
 	fmt.Println(confirmationLabel)
 
 	// Scan terminal for input
-	fmt.Scanln(&s)
+	_, err := fmt.Scanln(&s)
+	if err != nil {
+		fmt.Println("cannot read input:", err)
+		os.Exit(1)
+	}
 	// If user acknowledges, return account summary associated
 	if s == "Y" {
 		return u
