@@ -8,7 +8,7 @@ linters:
     - misspell
     - revive
     - staticcheck
-    - tenv
+    - usetesting
     - unconvert
     - mnd
     - prealloc
