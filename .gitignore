@@ -16,4 +16,6 @@ vendor/
 
 ec2ctl
 
-node_modules
+node_modules/
+
+dist/
