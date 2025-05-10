@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/log"
 	"github.com/frgrisk/ec2ctl/cmd/types"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,9 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
 	rootCmd.PersistentFlags().Var(&output, "output", "output format (table, json)")
 	rootCmd.PersistentFlags().StringToStringVar(&tags, "tag", map[string]string{}, "query by tags - specified as key=value pairs (e.g. Environment=dev,Name=dev.example.com)")
+
+	log.SetReportTimestamp(false)
+	log.SetReportCaller(true)
 }
 
 // initConfig reads in config file and ENV variables if set.

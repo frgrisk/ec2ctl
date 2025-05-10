@@ -25,7 +25,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/frgrisk/ec2ctl/cmd/types"
 
@@ -71,7 +74,15 @@ var statusCmd = &cobra.Command{
 
 func getAccountSummary(regions []string, tags map[string]string, action string, instanceIDs []string) (accSum aws.AccountSummary) {
 	if len(regions) == 0 {
-		regions = aws.GetRegions()
+		if err := spinner.New().
+			Title("Querying account regions...").
+			Accessible(os.Getenv("ACCESSIBLE") != "").
+			Action(func() {
+				regions = aws.GetRegions()
+			}).
+			Run(); err != nil {
+			log.Fatalf("Cannot render spinner: %v", err)
+		}
 	}
 
 	c := make(chan aws.RegionSummary)
@@ -80,11 +91,19 @@ func getAccountSummary(regions []string, tags map[string]string, action string, 
 	}
 	var regSum aws.RegionSummary
 
-	for range regions {
-		regSum = <-c
-		if len(regSum.Instances) > 0 {
-			accSum = append(accSum, regSum)
-		}
+	if err := spinner.New().
+		Title(fmt.Sprintf("Querying instances across %d regions...", len(regions))).
+		Accessible(os.Getenv("ACCESSIBLE") != "").
+		Action(func() {
+			for range regions {
+				regSum = <-c
+				if len(regSum.Instances) > 0 {
+					accSum = append(accSum, regSum)
+				}
+			}
+		}).
+		Run(); err != nil {
+		log.Fatalf("Cannot render spinner: %v", err)
 	}
 	return
 }

@@ -25,9 +25,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"regexp"
 	"sync"
 
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 
 	"github.com/spf13/cobra"
@@ -79,7 +82,9 @@ func startStop(instances []string, action string) {
 	// Preprocessing is done to filter and group the instances by the region
 	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of available regions
 	// Initialised go routine for parallel api calls to increase speed
+	numInstances := 0
 	for _, regionSum := range accSum {
+		numInstances += len(regionSum.Instances)
 		wg.Add(1)
 		var instanceIDs []string
 		for _, instance := range regionSum.Instances {
@@ -111,7 +116,13 @@ func startStop(instances []string, action string) {
 			}
 		}(region, instanceIDs)
 	}
-	wg.Wait()
+	if err := spinner.New().
+		Title(fmt.Sprintf("Performing %s on %d instances...", action, numInstances)).
+		Accessible(os.Getenv("ACCESSIBLE") != "").
+		Action(wg.Wait).
+		Run(); err != nil {
+		log.Fatalf("Cannot render spinner: %v", err)
+	}
 }
 
 func init() {
