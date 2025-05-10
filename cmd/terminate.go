@@ -104,7 +104,7 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 		if err := spinner.New().
 			Title(fmt.Sprintf("Terminating instance(s) [%s] in region %s...", strings.Join(v, ", "), k)).
 			Accessible(os.Getenv("ACCESSIBLE") != "").
-			ActionWithErr(func(ctx context.Context) error {
+			ActionWithErr(func(_ context.Context) error {
 				return aws.TerminateInstances(k, v)
 			}).
 			Run(); err != nil {

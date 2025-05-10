@@ -18,6 +18,8 @@ import (
 	"golang.org/x/term"
 )
 
+const minRenderedTableWidth = 200
+
 // RegionSummary is a structure holding deployed instances in a given region
 type RegionSummary struct {
 	Region    string
@@ -176,7 +178,7 @@ func WriteTable(title string, data []Instance) {
 		glamour.WithAutoStyle(),
 		glamour.WithEmoji(),
 		glamour.WithTableWrap(false),
-		glamour.WithWordWrap(min(width, 200)),
+		glamour.WithWordWrap(min(width, minRenderedTableWidth)),
 	)
 	rendered, err := r.Render(md.String())
 	if err != nil {
