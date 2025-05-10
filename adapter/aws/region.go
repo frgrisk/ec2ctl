@@ -157,13 +157,13 @@ func WriteTable(title string, data []Instance) {
 			case "Status":
 				switch o.Status {
 				case types.InstanceStateNameRunning:
-					row = append(row, fmt.Sprintf(":white_check_mark: **%s**", value))
+					row = append(row, fmt.Sprintf(":green_circle: **%s**", value))
 				case types.InstanceStateNameStopped:
-					row = append(row, fmt.Sprintf(":x: **%s**", value))
+					row = append(row, fmt.Sprintf(":red_circle: **%s**", value))
 				case types.InstanceStateNamePending, types.InstanceStateNameStopping:
-					row = append(row, fmt.Sprintf(":warning: **%s**", value))
+					row = append(row, fmt.Sprintf(":yellow_circle: **%s**", value))
 				case types.InstanceStateNameTerminated:
-					row = append(row, fmt.Sprintf(":skull: **%s**", value))
+					row = append(row, fmt.Sprintf(":skull_and_crossbones: **%s**", value))
 				default:
 					row = append(row, value)
 				}
