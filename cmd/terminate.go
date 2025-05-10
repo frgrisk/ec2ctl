@@ -23,11 +23,14 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/huh/spinner"
+	"github.com/charmbracelet/log"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/spf13/cobra"
 )
@@ -83,23 +86,31 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 	}
 	for k, v := range instanceRegionMap {
 		if !force {
-			fmt.Printf(`Are you sure you want to terminate instances %v in region %s?
-	Only 'yes' will be accepted to approve
-
-	Enter a value: `, v, k)
-			reader := bufio.NewReader(os.Stdin)
-			text, _ := reader.ReadString('\n')
-			text = strings.ReplaceAll(text, "\n", "")
-			if text != "yes" {
+			var confirm bool
+			if err := huh.NewConfirm().
+				Title(fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k)).
+				Value(&confirm).
+				Affirmative("Yes").
+				Negative("No").
+				WithAccessible(os.Getenv("ACCESSIBLE") != "").
+				Run(); err != nil {
+				log.Fatalf("Cannot prompt for confirmation: %v", err)
+				return
+			}
+			if !confirm {
 				continue
 			}
 		}
-		err := aws.TerminateInstances(k, v)
-		if err != nil {
-			fmt.Printf("%s: error terminating instances %v: %s\n", k, v, err)
-		} else {
-			fmt.Printf("%s: successfully terminated the following instances %v\n", k, v)
+		if err := spinner.New().
+			Title(fmt.Sprintf("Terminating instance(s) [%s] in region %s...", strings.Join(v, ", "), k)).
+			Accessible(os.Getenv("ACCESSIBLE") != "").
+			ActionWithErr(func(ctx context.Context) error {
+				return aws.TerminateInstances(k, v)
+			}).
+			Run(); err != nil {
+			log.Fatalf("Cannot terminate instances: %v", err)
 		}
+		fmt.Printf("%s: successfully terminated the following instances %v\n", k, v)
 	}
 
 	for k, v := range instanceMap {

@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
-	"github.com/olekukonko/tablewriter"
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/log"
+	"golang.org/x/term"
 )
 
 // RegionSummary is a structure holding deployed instances in a given region
@@ -29,39 +31,35 @@ type AccountSummary []RegionSummary
 func (u AccountSummary) Print() {
 	for _, region := range u {
 		region.Print()
-		fmt.Println("")
 	}
 }
 
 // Prompt prompts user for confirmation
 func (u AccountSummary) Prompt(action string) AccountSummary {
-	var s string
-
-	// Declare labels to print onto terminal
-	questionLabel := "\n" + "This command will " + action + " the following running instances matching the filter:\n"
-	confirmationLabel := "\nWould you like to proceed? [Y/n]"
-	errLabel := "No instances are available for " + action + " command.\n"
-
 	// If no region summary in account summary, means no matching instances, return err
 	if len(u) == 0 {
-		fmt.Print(errLabel)
+		fmt.Println("No instances are available for " + action + " command.")
 		os.Exit(0)
 	}
 	// If region summary exists in account summary, means there are matching instances, return as table
-	fmt.Println(questionLabel)
 	for _, regionSum := range u {
 		regionSum.Print()
 	}
-	fmt.Println(confirmationLabel)
-
-	// Scan terminal for input
-	_, err := fmt.Scanln(&s)
+	var confirm bool
+	err := huh.NewConfirm().
+		Title("This action will " + action + " the instances above matching the filter. Would you like to proceed?").
+		Value(&confirm).
+		Affirmative("Yes").
+		Negative("No").
+		WithAccessible(os.Getenv("ACCESSIBLE") != "").
+		Run()
 	if err != nil {
-		fmt.Println("cannot read input:", err)
+		fmt.Println("cannot prompt for confirmation:", err)
 		os.Exit(1)
 	}
+
 	// If user acknowledges, return account summary associated
-	if s == "Y" {
+	if confirm {
 		return u
 	}
 	// Else, return empty
@@ -82,8 +80,7 @@ func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 
 // Print prints the summary of instances in a given region in tabular format
 func (u RegionSummary) Print() {
-	fmt.Println(u.Region)
-	WriteTable(u.Instances)
+	WriteTable(u.Region, u.Instances)
 }
 
 // GetRegions is a function to retrieve all active regions in an account
@@ -92,6 +89,10 @@ func GetRegions() (regions []string) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Fatal(err)
+	}
+	cfg.DefaultsMode = aws.DefaultsModeCrossRegion
+	if cfg.Region == "" {
+		cfg.Region = "us-east-1"
 	}
 	svc := ec2.NewFromConfig(cfg)
 	input := &ec2.DescribeRegionsInput{
@@ -108,11 +109,7 @@ func GetRegions() (regions []string) {
 
 	result, err := svc.DescribeRegions(ctx, input)
 	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			log.Printf("code: %s, message: %s, fault: %s", ae.ErrorCode(), ae.ErrorMessage(), ae.ErrorFault().String())
-		}
-		return
+		log.Fatal(err)
 	}
 
 	for _, r := range result.Regions {
@@ -131,47 +128,59 @@ func IDs(instances []Instance) []string {
 	return ids
 }
 
-func WriteTable(data []Instance) {
-	table := tablewriter.NewWriter(os.Stdout)
-
+func WriteTable(title string, data []Instance) {
 	structFields := reflect.VisibleFields(reflect.TypeOf(data[0]))
 	header := make([]string, 0, len(structFields))
-	headerColors := make([]tablewriter.Colors, 0, len(structFields))
 	for _, f := range structFields {
+		if f.Name == "Region" {
+			continue
+		}
 		header = append(header, f.Name)
-		headerColors = append(headerColors, tablewriter.Colors{tablewriter.Bold})
 	}
-	table.SetHeader(header)
-	table.SetHeaderColor(headerColors...)
+
+	var md strings.Builder
+	_, _ = md.WriteString(fmt.Sprintf("## %s\n", title))
+	_, _ = md.WriteString(fmt.Sprintf("| %s |\n", strings.Join(header, " | ")))
+	_, _ = md.WriteString(fmt.Sprintf("|%s\n", strings.Repeat(" --- |", len(header))))
 
 	for _, o := range data {
-		var row []string
-		var rowColor []tablewriter.Colors
+		row := make([]string, 0, len(structFields))
 		for _, f := range structFields {
 			value := fmt.Sprintf("%v", reflect.ValueOf(o).FieldByName(f.Name).Interface())
-			row = append(row, value)
 			switch f.Name {
+			case "Region":
+				continue
 			case "Name":
-				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold})
+				row = append(row, fmt.Sprintf("**%s**", value))
 			case "Status":
 				switch o.Status {
 				case types.InstanceStateNameRunning:
-					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgGreenColor})
+					row = append(row, fmt.Sprintf(":white_check_mark: **%s**", value))
 				case types.InstanceStateNameStopped:
-					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgRedColor})
+					row = append(row, fmt.Sprintf(":x: **%s**", value))
 				case types.InstanceStateNamePending, types.InstanceStateNameStopping:
-					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgYellowColor})
+					row = append(row, fmt.Sprintf(":warning: **%s**", value))
 				case types.InstanceStateNameTerminated:
-					rowColor = append(rowColor, tablewriter.Colors{tablewriter.FgBlackColor})
+					row = append(row, fmt.Sprintf(":skull: **%s**", value))
 				default:
-					rowColor = append(rowColor, tablewriter.Colors{})
+					row = append(row, value)
 				}
 			default:
-				rowColor = append(rowColor, tablewriter.Colors{})
+				row = append(row, value)
 			}
 		}
-		table.Rich(row, rowColor)
+		_, _ = md.WriteString(fmt.Sprintf("| %s |\n", strings.Join(row, " | ")))
 	}
-
-	table.Render()
+	width, _, _ := term.GetSize(int(os.Stdout.Fd()))
+	r, _ := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithEmoji(),
+		glamour.WithTableWrap(false),
+		glamour.WithWordWrap(min(width, 200)),
+	)
+	rendered, err := r.Render(md.String())
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(rendered)
 }
