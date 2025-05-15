@@ -149,19 +149,27 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 
 	for _, res := range result.Reservations {
 		for _, inst := range res.Instances {
-			instance.ID = *inst.InstanceId
+			if inst.InstanceId != nil {
+				instance.ID = *inst.InstanceId
+			}
 			instance.Status = inst.State.Name
 			instance.Type = inst.InstanceType
-			instance.IP = *inst.PrivateIpAddress
-			instance.Hibernation = *inst.HibernationOptions.Configured
+			if inst.PrivateIpAddress != nil {
+				instance.IP = *inst.PrivateIpAddress
+			}
+			if inst.HibernationOptions != nil && inst.HibernationOptions.Configured != nil {
+				instance.Hibernation = *inst.HibernationOptions.Configured
+			}
 			instance.Region = region
-			instance.AZ = getInstanceAZ(resultStatus.InstanceStatuses, inst.InstanceId)
+			if inst.InstanceId != nil {
+				instance.AZ = getInstanceAZ(resultStatus.InstanceStatuses, inst.InstanceId)
+			}
 			instance.SpotInstanceType = ""
 			if inst.InstanceLifecycle == "" {
 				instance.Lifecycle = string(types.InstanceLifecycleOnDemand)
 			} else {
 				instance.Lifecycle = string(inst.InstanceLifecycle)
-				if inst.InstanceLifecycle == types.InstanceLifecycleTypeSpot {
+				if inst.InstanceLifecycle == types.InstanceLifecycleTypeSpot && inst.SpotInstanceRequestId != nil {
 					instance.SpotInstanceType = getSpotRequestType(spotDetail.SpotInstanceRequests, inst.SpotInstanceRequestId)
 				}
 			}
