@@ -48,11 +48,8 @@ var terminateCmd = &cobra.Command{
 }
 
 func init() {
+	configureConfirmation(terminateCmd)
 	rootCmd.AddCommand(terminateCmd)
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	terminateCmd.Flags().BoolP("force", "f", false, "Force terminate the instance (do not prompt for confirmation)")
 }
 
 func terminateInstance(cmd *cobra.Command, instances []string) {
