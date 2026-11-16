@@ -1,6 +1,6 @@
 module github.com/frgrisk/ec2ctl
 
-go 1.24.2
+go 1.27
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.2
