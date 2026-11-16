@@ -41,13 +41,21 @@ var stopCmd = &cobra.Command{
 	# Stop specific regions
 	ec2ctl stop --regions us-east-1,ap-southeast-1
 	# Stop specific tags
-	ec2ctl stop --tag Environment:dev
+	ec2ctl stop --tag Environment=dev
+	# Stop without prompting (scripts and agent sessions)
+	ec2ctl stop --regions us-east-1 --tag Environment=dev --force
 	`,
-	Run: func(_ *cobra.Command, args []string) {
-		startStop(args, aws.InstanceStop)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return err
+		}
+		startStop(args, aws.InstanceStop, force)
+		return nil
 	},
 }
 
 func init() {
+	configureConfirmation(stopCmd)
 	rootCmd.AddCommand(stopCmd)
 }
