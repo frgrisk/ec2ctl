@@ -16,7 +16,7 @@ const (
 
 // Set converts a string to the output type
 func (i *Output) Set(s string) error {
-	for idx := 0; idx < len(_Output_index)-1; idx++ {
+	for idx := range len(_Output_index) - 1 {
 		if strings.EqualFold(s, _Output_name[_Output_index[idx]:_Output_index[idx+1]]) {
 			*i = Output(idx)
 			return nil

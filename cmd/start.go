@@ -85,14 +85,9 @@ func startStop(instances []string, action string) {
 	numInstances := 0
 	for _, regionSum := range accSum {
 		numInstances += len(regionSum.Instances)
-		wg.Add(1)
-		var instanceIDs []string
-		for _, instance := range regionSum.Instances {
-			instanceIDs = append(instanceIDs, instance.ID)
-		}
-		region := regionSum.Region
-		go func(region string, instanceIDs []string) {
-			defer wg.Done()
+		wg.Go(func() {
+			region := regionSum.Region
+			instanceIDs := aws.IDs(regionSum.Instances)
 			state, err := aws.StartStopInstance(region, action, instanceIDs)
 			if err != nil {
 				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceIDs, region, err)
@@ -114,7 +109,7 @@ func startStop(instances []string, action string) {
 					)
 				}
 			}
-		}(region, instanceIDs)
+		})
 	}
 	if err := spinner.New().
 		Title(fmt.Sprintf("Performing %s on %d instances...", action, numInstances)).

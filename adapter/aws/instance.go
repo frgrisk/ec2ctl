@@ -1,13 +1,13 @@
 package aws
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log"
-	"sort"
+	"slices"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -65,21 +65,21 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 	switch action {
 	case InstanceStop:
 		stateFilter = types.Filter{
-			Name: aws.String("instance-state-name"),
+			Name: new("instance-state-name"),
 			Values: []string{
 				string(types.InstanceStateNameRunning),
 			},
 		}
 	case InstanceStart:
 		stateFilter = types.Filter{
-			Name: aws.String("instance-state-name"),
+			Name: new("instance-state-name"),
 			Values: []string{
 				string(types.InstanceStateNameStopped),
 			},
 		}
 	default:
 		stateFilter = types.Filter{
-			Name: aws.String("instance-state-name"),
+			Name: new("instance-state-name"),
 			Values: []string{
 				string(types.InstanceStateNamePending),
 				string(types.InstanceStateNameRunning),
@@ -95,7 +95,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 	// Filter by tag type
 	for tagKey, tagVal := range tags {
 		newTagFilter := types.Filter{
-			Name: aws.String("tag:" + tagKey),
+			Name: new("tag:" + tagKey),
 			Values: []string{
 				tagVal,
 			},
@@ -106,7 +106,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 	// Filter by instanceIDs
 	if len(instanceIDs) != 0 {
 		idFilter := types.Filter{
-			Name:   aws.String("instance-id"),
+			Name:   new("instance-id"),
 			Values: instanceIDs,
 		}
 		filters = append(filters, idFilter)
@@ -127,7 +127,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		Filters: []types.Filter{
 			stateFilter,
 		},
-		IncludeAllInstances: aws.Bool(true),
+		IncludeAllInstances: new(true),
 	}
 
 	resultStatus, err := svc.DescribeInstanceStatus(ctx, inputStatus)
@@ -194,13 +194,8 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		}
 	}
 
-	sort.SliceStable(instances, func(i, j int) bool {
-		if instances[i].Environment < instances[j].Environment {
-			return true
-		} else if instances[i].Environment > instances[j].Environment {
-			return false
-		}
-		return instances[i].Name < instances[j].Name
+	slices.SortStableFunc(instances, func(a, b Instance) int {
+		return cmp.Or(cmp.Compare(a.Environment, b.Environment), cmp.Compare(a.Name, b.Name))
 	})
 
 	rSummary.Instances = instances
@@ -229,19 +224,16 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 		// necessary permissions to monitor the instance.
 		input := &ec2.StartInstancesInput{
 			InstanceIds: instanceIDs,
-			DryRun:      aws.Bool(true),
+			DryRun:      new(true),
 		}
 		result, err := svc.StartInstances(ctx, input)
 		// If the error code is `DryRunOperation` it means we have the necessary
 		// permissions to Start this instance
 		if err != nil {
-			var ae smithy.APIError
-			if errors.As(err, &ae) {
-				if ae.ErrorCode() == DryRunOperation {
-					// Let's now set dry run to be false. This will allow us to start the instances
-					input.DryRun = aws.Bool(false)
-					result, err = svc.StartInstances(ctx, input)
-				}
+			if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == DryRunOperation {
+				// Let's now set dry run to be false. This will allow us to start the instances
+				input.DryRun = new(false)
+				result, err = svc.StartInstances(ctx, input)
 			}
 		}
 		if err != nil {
@@ -253,20 +245,17 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 		// Turn instances off
 		input := &ec2.StopInstancesInput{
 			InstanceIds: instanceIDs,
-			DryRun:      aws.Bool(true),
+			DryRun:      new(true),
 		}
 		if action == InstanceHibernate {
-			input.Hibernate = aws.Bool(true)
+			input.Hibernate = new(true)
 		}
 		result, err := svc.StopInstances(ctx, input)
 		if err != nil {
-			var ae smithy.APIError
-			if errors.As(err, &ae) {
-				if ae.ErrorCode() == DryRunOperation {
-					// Let's now set dry run to be false. This will allow us to start the instances
-					input.DryRun = aws.Bool(false)
-					result, err = svc.StopInstances(ctx, input)
-				}
+			if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == DryRunOperation {
+				// Let's now set dry run to be false. This will allow us to start the instances
+				input.DryRun = new(false)
+				result, err = svc.StopInstances(ctx, input)
 			}
 		}
 		if err != nil {
@@ -296,24 +285,21 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 
 	// This modifies the instance type of the specified instance
 	input := &ec2.ModifyInstanceAttributeInput{
-		InstanceId: aws.String(instanceID),
+		InstanceId: new(instanceID),
 		InstanceType: &types.AttributeValue{
-			Value: aws.String(instanceType),
+			Value: new(instanceType),
 		},
-		DryRun: aws.Bool(true),
+		DryRun: new(true),
 	}
 
 	_, err = svc.ModifyInstanceAttribute(ctx, input)
 	// If the error code is `DryRunOperation` it means we have the necessary
 	// permissions to Start this instance
 	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			if ae.ErrorCode() == DryRunOperation {
-				// Let's now set dry run to be false. This will allow us to start the instances
-				input.DryRun = aws.Bool(false)
-				_, err = svc.ModifyInstanceAttribute(ctx, input)
-			}
+		if ae, ok := errors.AsType[smithy.APIError](err); ok && ae.ErrorCode() == DryRunOperation {
+			// Let's now set dry run to be false. This will allow us to start the instances
+			input.DryRun = new(false)
+			_, err = svc.ModifyInstanceAttribute(ctx, input)
 		}
 	}
 
@@ -342,19 +328,19 @@ func TerminateInstances(region string, instances []string) (err error) {
 }
 
 func getSpotRequestType(requests []types.SpotInstanceRequest, id *string) types.SpotInstanceType {
-	for _, request := range requests {
-		if *request.SpotInstanceRequestId == *id {
-			return request.Type
-		}
+	if i := slices.IndexFunc(requests, func(request types.SpotInstanceRequest) bool {
+		return *request.SpotInstanceRequestId == *id
+	}); i >= 0 {
+		return requests[i].Type
 	}
 	return ""
 }
 
 func getInstanceAZ(statuses []types.InstanceStatus, id *string) string {
-	for _, instance := range statuses {
-		if *instance.InstanceId == *id {
-			return *instance.AvailabilityZone
-		}
+	if i := slices.IndexFunc(statuses, func(instance types.InstanceStatus) bool {
+		return *instance.InstanceId == *id
+	}); i >= 0 {
+		return *statuses[i].AvailabilityZone
 	}
 	return ""
 }
