@@ -1,11 +1,13 @@
 package aws
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -48,13 +50,17 @@ func (u AccountSummary) Prompt(action string) AccountSummary {
 		regionSum.Print()
 	}
 	var confirm bool
-	err := huh.NewConfirm().
+	prompt := huh.NewConfirm().
 		Title("This action will " + action + " the instances above matching the filter. Would you like to proceed?").
 		Value(&confirm).
 		Affirmative("Yes").
-		Negative("No").
-		WithAccessible(os.Getenv("ACCESSIBLE") != "").
-		Run()
+		Negative("No")
+	var err error
+	if os.Getenv("ACCESSIBLE") != "" {
+		err = prompt.RunAccessible(os.Stdout, os.Stdin)
+	} else {
+		err = prompt.Run()
+	}
 	if err != nil {
 		fmt.Println("cannot prompt for confirmation:", err)
 		os.Exit(1)
@@ -71,10 +77,10 @@ func (u AccountSummary) Prompt(action string) AccountSummary {
 // GetInstanceRegion returns the region of an instance given an account summary
 func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 	for _, region := range accSum {
-		for _, instance := range region.Instances {
-			if instance.ID == id {
-				return region.Region, nil
-			}
+		if slices.ContainsFunc(region.Instances, func(instance Instance) bool {
+			return instance.ID == id
+		}) {
+			return region.Region, nil
 		}
 	}
 	return "", errors.New("instance not found")
@@ -93,14 +99,12 @@ func GetRegions() (regions []string) {
 		log.Fatal(err)
 	}
 	cfg.DefaultsMode = aws.DefaultsModeCrossRegion
-	if cfg.Region == "" {
-		cfg.Region = "us-east-1"
-	}
+	cfg.Region = cmp.Or(cfg.Region, "us-east-1")
 	svc := ec2.NewFromConfig(cfg)
 	input := &ec2.DescribeRegionsInput{
 		Filters: []types.Filter{
 			{
-				Name: aws.String("opt-in-status"),
+				Name: new("opt-in-status"),
 				Values: []string{
 					"opted-in",
 					"opt-in-not-required",
@@ -131,7 +135,7 @@ func IDs(instances []Instance) []string {
 }
 
 func WriteTable(title string, data []Instance) {
-	structFields := reflect.VisibleFields(reflect.TypeOf(data[0]))
+	structFields := reflect.VisibleFields(reflect.TypeFor[Instance]())
 	header := make([]string, 0, len(structFields))
 	for _, f := range structFields {
 		if f.Name == "Region" {
@@ -141,9 +145,9 @@ func WriteTable(title string, data []Instance) {
 	}
 
 	var md strings.Builder
-	_, _ = md.WriteString(fmt.Sprintf("## %s\n", title))
-	_, _ = md.WriteString(fmt.Sprintf("| %s |\n", strings.Join(header, " | ")))
-	_, _ = md.WriteString(fmt.Sprintf("|%s\n", strings.Repeat(" --- |", len(header))))
+	_, _ = fmt.Fprintf(&md, "## %s\n", title)
+	_, _ = fmt.Fprintf(&md, "| %s |\n", strings.Join(header, " | "))
+	_, _ = fmt.Fprintf(&md, "|%s\n", strings.Repeat(" --- |", len(header)))
 
 	for _, o := range data {
 		row := make([]string, 0, len(structFields))
@@ -171,7 +175,7 @@ func WriteTable(title string, data []Instance) {
 				row = append(row, value)
 			}
 		}
-		_, _ = md.WriteString(fmt.Sprintf("| %s |\n", strings.Join(row, " | ")))
+		_, _ = fmt.Fprintf(&md, "| %s |\n", strings.Join(row, " | "))
 	}
 	width, _, _ := term.GetSize(int(os.Stdout.Fd()))
 	r, _ := glamour.NewTermRenderer(

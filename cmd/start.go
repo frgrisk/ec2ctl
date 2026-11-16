@@ -49,10 +49,17 @@ var startCmd = &cobra.Command{
 	# Start specific regions
 	ec2ctl start --regions us-east-1,ap-southeast-1
 	# Start specific tags
-	ec2ctl start --tag Environment:dev
+	ec2ctl start --tag Environment=dev
+	# Start without prompting (scripts and agent sessions)
+	ec2ctl start --regions us-east-1 --tag Environment=dev --force
 	`,
-	Run: func(_ *cobra.Command, args []string) {
-		startStop(args, aws.InstanceStart)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return err
+		}
+		startStop(args, aws.InstanceStart, force)
+		return nil
 	},
 }
 
@@ -70,14 +77,21 @@ func validateInstanceArgs(args []string) error {
 	return nil
 }
 
-func startStop(instances []string, action string) {
+func startStop(instances []string, action string, force bool) {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
 
 	// Filter instances by region, tags, and current status
 	accSum = getAccountSummary(regions, tags, action, instances)
-	// Show confirmation prompt to user, showing list of matched instances
-	accSum = accSum.Prompt(action)
+	if len(accSum) == 0 {
+		fmt.Println("No instances are available for " + action + " command.")
+		return
+	}
+	if force {
+		accSum.Print()
+	} else {
+		accSum = accSum.Prompt(action)
+	}
 
 	// Preprocessing is done to filter and group the instances by the region
 	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of available regions
@@ -85,14 +99,9 @@ func startStop(instances []string, action string) {
 	numInstances := 0
 	for _, regionSum := range accSum {
 		numInstances += len(regionSum.Instances)
-		wg.Add(1)
-		var instanceIDs []string
-		for _, instance := range regionSum.Instances {
-			instanceIDs = append(instanceIDs, instance.ID)
-		}
-		region := regionSum.Region
-		go func(region string, instanceIDs []string) {
-			defer wg.Done()
+		wg.Go(func() {
+			region := regionSum.Region
+			instanceIDs := aws.IDs(regionSum.Instances)
 			state, err := aws.StartStopInstance(region, action, instanceIDs)
 			if err != nil {
 				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceIDs, region, err)
@@ -114,7 +123,7 @@ func startStop(instances []string, action string) {
 					)
 				}
 			}
-		}(region, instanceIDs)
+		})
 	}
 	if err := spinner.New().
 		Title(fmt.Sprintf("Performing %s on %d instances...", action, numInstances)).
@@ -126,5 +135,6 @@ func startStop(instances []string, action string) {
 }
 
 func init() {
+	configureConfirmation(startCmd)
 	rootCmd.AddCommand(startCmd)
 }

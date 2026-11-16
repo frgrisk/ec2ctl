@@ -48,19 +48,16 @@ var terminateCmd = &cobra.Command{
 }
 
 func init() {
+	configureConfirmation(terminateCmd)
 	rootCmd.AddCommand(terminateCmd)
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	terminateCmd.Flags().BoolP("force", "f", false, "Force terminate the instance (do not prompt for confirmation)")
 }
 
 func terminateInstance(cmd *cobra.Command, instances []string) {
 	// Get account summary based on regions and tags specified
 	accSum := getAccountSummary(regions, tags, "", instances)
 
-	instanceMap := make(map[string]*aws.Instance, 0)
-	instanceRegionMap := make(map[string][]string, 0)
+	instanceMap := make(map[string]*aws.Instance, len(instances))
+	instanceRegionMap := make(map[string][]string)
 
 	for _, i := range instances {
 		instanceMap[i] = nil
@@ -87,13 +84,18 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 	for k, v := range instanceRegionMap {
 		if !force {
 			var confirm bool
-			if err := huh.NewConfirm().
+			prompt := huh.NewConfirm().
 				Title(fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k)).
 				Value(&confirm).
 				Affirmative("Yes").
-				Negative("No").
-				WithAccessible(os.Getenv("ACCESSIBLE") != "").
-				Run(); err != nil {
+				Negative("No")
+			var err error
+			if os.Getenv("ACCESSIBLE") != "" {
+				err = prompt.RunAccessible(os.Stdout, os.Stdin)
+			} else {
+				err = prompt.Run()
+			}
+			if err != nil {
 				log.Fatalf("Cannot prompt for confirmation: %v", err)
 				return
 			}
