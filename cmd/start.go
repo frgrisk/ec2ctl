@@ -130,7 +130,7 @@ func startStop(
 	for _, regionSum := range accSum {
 		numInstances += len(regionSum.Instances)
 	}
-	if err := ui.Progress(
+	progressErr := ui.Progress(
 		ctx,
 		fmt.Sprintf("Sending %s request for %d instances...", action, numInstances),
 		func(ctx context.Context) error {
@@ -155,15 +155,18 @@ func startStop(
 			wg.Wait()
 			return nil
 		},
-	); err != nil {
-		return err
-	}
+	)
+	// Progress has joined the action even when animation or its caller was
+	// cancelled. Report every collected result before returning that error.
 	var failures []error
 	for _, result := range results {
 		ui.Printf("%s", result.message)
 		if result.err != nil {
 			failures = append(failures, result.err)
 		}
+	}
+	if progressErr != nil {
+		failures = append(failures, progressErr)
 	}
 	if err := errors.Join(failures...); err != nil {
 		return err
