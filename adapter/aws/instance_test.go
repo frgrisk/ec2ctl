@@ -15,6 +15,8 @@ import (
 	"github.com/aws/smithy-go"
 )
 
+const testRegion = "us-east-1"
+
 func mockEC2(t *testing.T, handler http.HandlerFunc) {
 	t.Helper()
 	server := httptest.NewServer(handler)

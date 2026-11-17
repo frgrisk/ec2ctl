@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/frgrisk/ec2ctl/adapter/aws"
 )
 
 const (
@@ -18,6 +20,7 @@ const (
 	regionsFlag   = "--regions"
 	modifyAction  = "modify"
 	actionFailure = "action"
+	terminateName = "terminate"
 )
 
 func TestUsabilityProcess(t *testing.T) {
@@ -34,7 +37,7 @@ func TestUsabilityProcess(t *testing.T) {
 	t.Fatal("missing CLI arguments")
 }
 
-func runCLI(t *testing.T, endpoint string, args ...string) (stdoutText, stderrText string, runErr error) {
+func cliCommand(t *testing.T, endpoint string, args ...string) *exec.Cmd {
 	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
@@ -56,9 +59,17 @@ func runCLI(t *testing.T, endpoint string, args ...string) (stdoutText, stderrTe
 		"AWS_ACCESS_KEY_ID=test", "AWS_SECRET_ACCESS_KEY=test", "AWS_EC2_METADATA_DISABLED=true", "AWS_REGION=us-east-1",
 		"AWS_CONFIG_FILE="+filepath.Join(dir, "config"), "AWS_SHARED_CREDENTIALS_FILE="+filepath.Join(dir, "credentials"),
 		"AWS_IGNORE_CONFIGURED_ENDPOINT_URLS=false", "ACCESSIBLE=1")
+	return process
+}
+
+func runCLI(t *testing.T, endpoint string, args ...string) (stdoutText, stderrText string, runErr error) {
+	t.Helper()
+	process := cliCommand(t, endpoint, args...)
+
 	var stdout, stderr strings.Builder
 	process.Stdout, process.Stderr = &stdout, &stderr
-	err = process.Run()
+	process.Stdin = strings.NewReader("yes\n")
+	err := process.Run()
 	return stdout.String(), stderr.String(), err
 }
 
@@ -66,7 +77,7 @@ func TestInvalidArgumentsNeverReachAWS(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { requests.Add(1) }))
 	t.Cleanup(server.Close)
-	for _, action := range []string{"status", "start", "stop", "terminate", modifyAction} {
+	for _, action := range []string{"status", aws.InstanceStart, aws.InstanceStop, terminateName, modifyAction} {
 		args := []string{action, regionsFlag, cliTestRegion, "not-an-id"}
 		if action == modifyAction {
 			args = append(args, "--type", "t3.small")
@@ -76,7 +87,7 @@ func TestInvalidArgumentsNeverReachAWS(t *testing.T) {
 			t.Errorf("%s: error=%v, stderr=%s", action, err, stderr)
 		}
 	}
-	for _, action := range []string{"terminate", modifyAction} {
+	for _, action := range []string{terminateName, modifyAction} {
 		_, stderr, err := runCLI(t, server.URL, action, regionsFlag, cliTestRegion)
 		if err == nil || !strings.Contains(stderr, "at least one instance ID") {
 			t.Errorf("%s accepted missing IDs: %v %s", action, err, stderr)
@@ -131,7 +142,7 @@ func TestAWSFailuresExitNonzero(t *testing.T) {
 			t.Cleanup(server.Close)
 			args := []string{"status", regionsFlag, cliTestRegion, "-o", "json"}
 			if failure == actionFailure {
-				args = []string{"start", regionsFlag, cliTestRegion, "--force"}
+				args = []string{aws.InstanceStart, regionsFlag, cliTestRegion, "--force"}
 			}
 			stdout, stderr, err := runCLI(t, server.URL, args...)
 			if err == nil || !strings.Contains(stderr, "UnauthorizedOperation") {
@@ -148,5 +159,50 @@ func TestDemoNeedsNoAWS(t *testing.T) {
 	stdout, stderr, err := runCLI(t, "http://127.0.0.1:1", "demo", "-o", "json")
 	if err != nil || !jsontext.Value(stdout).IsValid() || !strings.Contains(stdout, "api-dev") {
 		t.Fatalf("stdout=%s stderr=%s err=%v", stdout, stderr, err)
+	}
+}
+
+func TestLifecycleRefusalNeverReachesAWS(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { requests.Add(1) }))
+	t.Cleanup(server.Close)
+	for _, action := range []string{aws.InstanceStart, aws.InstanceStop, terminateName} {
+		t.Run(action, func(t *testing.T) {
+			stdout, stderr, err := runCLI(
+				t,
+				server.URL,
+				action,
+				regionsFlag,
+				cliTestRegion,
+				"i-0123456789abcdef0",
+			)
+			isRefused := err != nil && strings.Contains(stderr, "--force")
+			if !isRefused || stdout != "" {
+				t.Fatalf(
+					"stdout=%q stderr=%q err=%v",
+					stdout,
+					stderr,
+					err,
+				)
+			}
+		})
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("refusal sent %d AWS requests", requests.Load())
+	}
+}
+
+func TestDemoUsesCommandOutput(t *testing.T) {
+	var output, diagnostics strings.Builder
+	demoCmd.SetOut(&output)
+	demoCmd.SetErr(&diagnostics)
+	t.Cleanup(func() { demoCmd.SetOut(nil); demoCmd.SetErr(nil) })
+	if err := demoCmd.RunE(demoCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	hasExpectedOutput := strings.Contains(output.String(), "Sample fleet") &&
+		strings.Contains(output.String(), "EC2 FLEET")
+	if !hasExpectedOutput || diagnostics.Len() != 0 {
+		t.Fatalf("output=%q diagnostics=%q", output.String(), diagnostics.String())
 	}
 }

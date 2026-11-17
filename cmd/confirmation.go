@@ -1,11 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 func configureConfirmation(command *cobra.Command) {
@@ -17,9 +13,6 @@ func configureConfirmation(command *cobra.Command) {
 		if err != nil {
 			return err
 		}
-		if !force && !term.IsTerminal(int(os.Stdin.Fd())) {
-			return fmt.Errorf("cannot confirm %s without terminal input; use --force (-f) to skip confirmation", command.Name())
-		}
-		return nil
+		return commandTerminal(command).RequireConfirmation(command.Name(), force)
 	}
 }

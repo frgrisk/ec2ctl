@@ -31,6 +31,7 @@ import (
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/frgrisk/ec2ctl/cmd/types"
+	"github.com/frgrisk/ec2ctl/internal/terminal"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +48,14 @@ var statusCmd = &cobra.Command{
   ec2ctl status -o json`,
 	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		summary, err := getAccountSummary(regions, tags, aws.InstanceStatus, args)
+		ui := commandTerminal(cmd)
+		summary, err := getAccountSummary(
+			ui,
+			regions,
+			tags,
+			aws.InstanceStatus,
+			args,
+		)
 		if err != nil {
 			return err
 		}
@@ -55,17 +63,23 @@ var statusCmd = &cobra.Command{
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(summary)
 		}
 		if len(summary) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "No instances match your filters. Check --regions, --tag and your AWS profile.")
+			ui.Printf("No instances match your filters. Check --regions, --tag and your AWS profile.\n")
 			return nil
 		}
-		summary.PrintWide(wide)
+		ui.Fleet(summary, wide)
 		return nil
 	},
 }
 
-func getAccountSummary(regions []string, tags map[string]string, action string, instanceIDs []string) (aws.AccountSummary, error) {
+func getAccountSummary(
+	ui *terminal.Terminal,
+	regions []string,
+	tags map[string]string,
+	action string,
+	instanceIDs []string,
+) (aws.AccountSummary, error) {
 	if len(regions) == 0 {
-		err := progress("Discovering enabled regions...", func() error {
+		err := ui.Progress("Discovering enabled regions...", func() error {
 			var err error
 			regions, err = aws.GetRegions()
 			return err
@@ -78,7 +92,7 @@ func getAccountSummary(regions []string, tags map[string]string, action string, 
 	summary := make(aws.AccountSummary, 0, len(regions))
 	results := make([]aws.RegionSummary, len(regions))
 	failures := make([]error, len(regions))
-	err := progress(fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)), func() error {
+	err := ui.Progress(fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)), func() error {
 		var wg sync.WaitGroup
 		for i, region := range regions {
 			wg.Go(func() {

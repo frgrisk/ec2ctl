@@ -51,7 +51,14 @@ func init() {
 
 func modifyInstances(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
-	accSum, err := getAccountSummary(regions, tags, "", instances)
+	ui := commandTerminal(cmd)
+	accSum, err := getAccountSummary(
+		ui,
+		regions,
+		tags,
+		"",
+		instances,
+	)
 	if err != nil {
 		return err
 	}
@@ -87,7 +94,7 @@ func modifyInstances(cmd *cobra.Command, instances []string) error {
 		if err := aws.ModifyInstanceType(instance.Region, t, id); err != nil {
 			return fmt.Errorf("modify %s: %w", id, err)
 		}
-		fmt.Printf("%s  %s  instance type changed to %s\n", instance.Region, id, t)
+		ui.Printf("%s  %s  instance type changed to %s\n", instance.Region, id, t)
 	}
 	return nil
 }

@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
+	"github.com/frgrisk/ec2ctl/internal/terminal"
 
 	"github.com/spf13/cobra"
 )
@@ -47,7 +48,12 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return startStop(args, aws.InstanceStart, force)
+		return startStop(
+			commandTerminal(cmd),
+			args,
+			aws.InstanceStart,
+			force,
+		)
 	},
 }
 
@@ -69,32 +75,39 @@ func optionalInstanceArgs(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func startStop(instances []string, action string, force bool) error {
+func startStop(ui *terminal.Terminal, instances []string, action string, force bool) error {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
 
 	// Filter instances by region, tags, and current status
 	var err error
-	accSum, err = getAccountSummary(regions, tags, action, instances)
+	accSum, err = getAccountSummary(
+		ui,
+		regions,
+		tags,
+		action,
+		instances,
+	)
 	if err != nil {
 		return err
 	}
 	if len(accSum) == 0 {
-		fmt.Printf("No instances ready to %s match your filters. Try ec2ctl status with the same filters.\n", action)
+		ui.Printf("No instances ready to %s match your filters. Try ec2ctl status with the same filters.\n", action)
 		return nil
 	}
-	if force {
-		accSum.Print()
-	} else {
-		accSum, err = accSum.Prompt(action)
+	ui.Fleet(accSum, false)
+	if !force {
+		confirmed, err := ui.Confirm(
+			"This action will "+action+" the instances above matching the filter. Would you like to proceed?",
+			"",
+		)
 		if err != nil {
 			return err
 		}
-	}
-
-	if len(accSum) == 0 {
-		fmt.Println("Cancelled. No instances changed.")
-		return nil
+		if !confirmed {
+			ui.Printf("Cancelled. No instances changed.\n")
+			return nil
+		}
 	}
 
 	// Run regions concurrently, then print results in a stable order.
@@ -118,12 +131,18 @@ func startStop(instances []string, action string, force bool) error {
 			}
 		})
 	}
-	if err := progress(fmt.Sprintf("Sending %s request for %d instances...", action, numInstances), func() error { wg.Wait(); return nil }); err != nil {
+	if err := ui.Progress(
+		fmt.Sprintf("Sending %s request for %d instances...", action, numInstances),
+		func() error {
+			wg.Wait()
+			return nil
+		},
+	); err != nil {
 		return err
 	}
 	var failures []error
 	for _, result := range results {
-		fmt.Print(result.message)
+		ui.Printf("%s", result.message)
 		if result.err != nil {
 			failures = append(failures, result.err)
 		}
@@ -131,7 +150,11 @@ func startStop(instances []string, action string, force bool) error {
 	if err := errors.Join(failures...); err != nil {
 		return err
 	}
-	fmt.Printf("%s request accepted for %d instances. Run ec2ctl status with the same filters to check progress.\n", action, numInstances)
+	ui.Printf(
+		"%s request accepted for %d instances. Run ec2ctl status with the same filters to check progress.\n",
+		action,
+		numInstances,
+	)
 	return nil
 }
 
