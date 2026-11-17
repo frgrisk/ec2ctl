@@ -23,27 +23,27 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/huh/spinner"
-	"github.com/charmbracelet/log"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/spf13/cobra"
 )
 
 // terminateCmd represents the terminate command
 var terminateCmd = &cobra.Command{
-	Use:   "terminate INSTANCE-ID [INSTANCE-ID...]",
-	Short: "Terminate one or more instances",
-	Long:  `This command terminate one or more instances.`,
+	Use:     "terminate INSTANCE-ID [INSTANCE-ID...]",
+	Short:   "Terminate one or more instances",
+	Long:    `Permanently terminate the specified instances. This cannot be undone.`,
+	Example: "  ec2ctl terminate --regions us-east-1 i-0123456789abcdef0",
 	Args: func(_ *cobra.Command, args []string) error {
 		return validateInstanceArgs(args)
 	},
-	Run:     terminateInstance,
+	RunE:    terminateInstance,
 	Aliases: []string{"delete", "destroy"},
 }
 
@@ -52,9 +52,12 @@ func init() {
 	rootCmd.AddCommand(terminateCmd)
 }
 
-func terminateInstance(cmd *cobra.Command, instances []string) {
+func terminateInstance(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
-	accSum := getAccountSummary(regions, tags, "", instances)
+	accSum, err := getAccountSummary(regions, tags, "", instances)
+	if err != nil {
+		return err
+	}
 
 	instanceMap := make(map[string]*aws.Instance, len(instances))
 	instanceRegionMap := make(map[string][]string)
@@ -78,46 +81,44 @@ func terminateInstance(cmd *cobra.Command, instances []string) {
 
 	force, err := cmd.Flags().GetBool("force")
 	if err != nil {
-		fmt.Println("cannot get value of force flag:", err)
-		return
+		return err
 	}
-	for k, v := range instanceRegionMap {
+	for _, id := range instances {
+		if instanceMap[id] == nil {
+			return fmt.Errorf("instance %s not found; check --regions and --tag", id)
+		}
+	}
+	accSum.Print()
+	for _, k := range slices.Sorted(maps.Keys(instanceRegionMap)) {
+		v := instanceRegionMap[k]
 		if !force {
 			var confirm bool
 			prompt := huh.NewConfirm().
 				Title(fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k)).
 				Value(&confirm).
+				Description("Termination is permanent and cannot be undone.").
 				Affirmative("Yes").
 				Negative("No")
 			var err error
-			if os.Getenv("ACCESSIBLE") != "" {
+			if os.Getenv("ACCESSIBLE") != "" || os.Getenv("TERM") == "dumb" {
 				err = prompt.RunAccessible(os.Stdout, os.Stdin)
 			} else {
 				err = prompt.Run()
 			}
 			if err != nil {
-				log.Fatalf("Cannot prompt for confirmation: %v", err)
-				return
+				return fmt.Errorf("confirmation cancelled: %w", err)
 			}
 			if !confirm {
+				fmt.Printf("%s: cancelled. No instances terminated.\n", k)
 				continue
 			}
 		}
-		if err := spinner.New().
-			Title(fmt.Sprintf("Terminating instance(s) [%s] in region %s...", strings.Join(v, ", "), k)).
-			Accessible(os.Getenv("ACCESSIBLE") != "").
-			ActionWithErr(func(_ context.Context) error {
-				return aws.TerminateInstances(k, v)
-			}).
-			Run(); err != nil {
-			log.Fatalf("Cannot terminate instances: %v", err)
+		if err := progress(fmt.Sprintf("Requesting termination in %s...", k), func() error {
+			return aws.TerminateInstances(k, v)
+		}); err != nil {
+			return fmt.Errorf("terminate in %s: %w", k, err)
 		}
-		fmt.Printf("%s: successfully terminated the following instances %v\n", k, v)
+		fmt.Printf("%s: termination requested for %v\n", k, v)
 	}
-
-	for k, v := range instanceMap {
-		if v == nil {
-			fmt.Println("instance", k, "could not be found")
-		}
-	}
+	return nil
 }

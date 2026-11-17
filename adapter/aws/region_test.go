@@ -31,8 +31,11 @@ func TestAccountSummaryPromptAccessible(t *testing.T) {
 			os.Stdin, os.Stdout = input, output
 			t.Cleanup(func() { os.Stdin, os.Stdout = stdin, stdout })
 
-			summary := AccountSummary{{Region: "us-east-1", Instances: []Instance{{ID: "i-test", Name: "test"}}}}
-			got := summary.Prompt(InstanceStart)
+			summary := AccountSummary{{Region: testRegion, Instances: []Instance{{ID: "i-test", Name: "test"}}}}
+			got, err := summary.Prompt(InstanceStart)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if answer == "yes" {
 				if len(got) != 1 || !slices.Equal(got[0].Instances, summary[0].Instances) {
 					t.Errorf("confirmed summary = %v, want %v", got, summary)

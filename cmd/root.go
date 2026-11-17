@@ -44,8 +44,19 @@ var tags map[string]string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ec2ctl",
-	Short: "ec2ctl is a command line tool for interacting with AWS EC2 instances",
-	Long:  `ec2ctl is a command line tool for interacting with AWS EC2 instances`,
+	Short: "Your EC2 fleet, at a glance",
+	Long: `ec2ctl — your EC2 fleet, at a glance.
+
+Find your instances. Bring them online. Power down when you are done.
+Filter by region, tag or instance ID; review matches before taking action.`,
+	Example: `  ec2ctl demo
+  ec2ctl status --regions us-east-1
+  ec2ctl status --tag Environment=dev
+  ec2ctl start --regions us-east-1 --tag Environment=dev
+  ec2ctl stop --regions us-east-1 i-0123456789abcdef0
+  ec2ctl status --output json`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -59,7 +70,7 @@ func init() {
 	// Global Flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ec2ctl.yaml)")
 	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
-	rootCmd.PersistentFlags().Var(&output, "output", "output format (table, json)")
+	rootCmd.PersistentFlags().VarP(&output, "output", "o", "status output format: table or json")
 	rootCmd.PersistentFlags().StringToStringVar(&tags, "tag", map[string]string{}, "query by tags - specified as key=value pairs (e.g. Environment=dev,Name=dev.example.com)")
 
 	log.SetReportTimestamp(false)

@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -43,7 +41,7 @@ type Instance struct {
 }
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]string, action string, instanceIDs []string) {
+func GetDeployedInstances(region string, tags map[string]string, action string, instanceIDs []string) (RegionSummary, error) {
 	ctx := context.TODO()
 	var rSummary RegionSummary
 	rSummary.Region = region
@@ -55,7 +53,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		config.WithRegion(region),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return rSummary, err
 	}
 
 	svc := ec2.NewFromConfig(cfg)
@@ -116,43 +114,47 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 		Filters: filters,
 	}
 
-	result, err := svc.DescribeInstances(ctx, input)
-	if err != nil {
-		fmt.Println(err.Error())
-		c <- rSummary
-		return
+	var reservations []types.Reservation
+	pages := ec2.NewDescribeInstancesPaginator(svc, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+		if err != nil {
+			return rSummary, err
+		}
+		reservations = append(reservations, page.Reservations...)
 	}
 
-	inputStatus := &ec2.DescribeInstanceStatusInput{
-		Filters: []types.Filter{
-			stateFilter,
-		},
-		IncludeAllInstances: new(true),
+	// Placement is already included in DescribeInstances. Only request spot details
+	// when matching instances need them; on-demand fleets need no spot permission.
+	var spotRequests []types.SpotInstanceRequest
+	needsSpot := false
+	for _, reservation := range reservations {
+		for _, instance := range reservation.Instances {
+			needsSpot = needsSpot || instance.SpotInstanceRequestId != nil
+		}
 	}
-
-	resultStatus, err := svc.DescribeInstanceStatus(ctx, inputStatus)
-	if err != nil {
-		fmt.Println(err.Error())
-		c <- rSummary
-		return
-	}
-
-	spotDetail, err := svc.DescribeSpotInstanceRequests(ctx, &ec2.DescribeSpotInstanceRequestsInput{})
-	if err != nil {
-		fmt.Println(err.Error())
-		c <- rSummary
-		return
+	if needsSpot {
+		pages := ec2.NewDescribeSpotInstanceRequestsPaginator(svc, &ec2.DescribeSpotInstanceRequestsInput{})
+		for pages.HasMorePages() {
+			page, err := pages.NextPage(ctx)
+			if err != nil {
+				return rSummary, err
+			}
+			spotRequests = append(spotRequests, page.SpotInstanceRequests...)
+		}
 	}
 
 	var instances []Instance
-	var instance Instance
 
-	for _, res := range result.Reservations {
+	for _, res := range reservations {
 		for _, inst := range res.Instances {
+			var instance Instance
 			if inst.InstanceId != nil {
 				instance.ID = *inst.InstanceId
 			}
-			instance.Status = inst.State.Name
+			if inst.State != nil {
+				instance.Status = inst.State.Name
+			}
 			instance.Type = inst.InstanceType
 			if inst.PrivateIpAddress != nil {
 				instance.IP = *inst.PrivateIpAddress
@@ -161,8 +163,8 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 				instance.Hibernation = *inst.HibernationOptions.Configured
 			}
 			instance.Region = region
-			if inst.InstanceId != nil {
-				instance.AZ = getInstanceAZ(resultStatus.InstanceStatuses, inst.InstanceId)
+			if inst.Placement != nil && inst.Placement.AvailabilityZone != nil {
+				instance.AZ = *inst.Placement.AvailabilityZone
 			}
 			instance.SpotInstanceType = ""
 			if inst.InstanceLifecycle == "" {
@@ -170,11 +172,11 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 			} else {
 				instance.Lifecycle = string(inst.InstanceLifecycle)
 				if inst.InstanceLifecycle == types.InstanceLifecycleTypeSpot && inst.SpotInstanceRequestId != nil {
-					instance.SpotInstanceType = getSpotRequestType(spotDetail.SpotInstanceRequests, inst.SpotInstanceRequestId)
+					instance.SpotInstanceType = getSpotRequestType(spotRequests, inst.SpotInstanceRequestId)
 				}
 			}
 
-			if inst.StateReason != nil {
+			if inst.StateReason != nil && inst.StateReason.Code != nil && inst.State != nil {
 				if *inst.StateReason.Code == "Client.UserInitiatedHibernate" && inst.State.Name == types.InstanceStateNameStopped {
 					instance.Status = "hibernated"
 				}
@@ -183,6 +185,9 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 			instance.Name = ""
 			instance.Environment = ""
 			for _, tag := range inst.Tags {
+				if tag.Key == nil || tag.Value == nil {
+					continue
+				}
 				switch *tag.Key {
 				case "Name":
 					instance.Name = *tag.Value
@@ -200,7 +205,7 @@ func GetDeployedInstances(c chan RegionSummary, region string, tags map[string]s
 
 	rSummary.Instances = instances
 
-	c <- rSummary
+	return rSummary, nil
 }
 
 // StartStopInstance starts or stops an AWS Instance
@@ -213,7 +218,7 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 		config.WithRegion(region),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	// Create new EC2 client
 	svc := ec2.NewFromConfig(cfg)
@@ -278,7 +283,7 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 		config.WithRegion(region),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	// Create new EC2 client
 	svc := ec2.NewFromConfig(cfg)
@@ -316,7 +321,7 @@ func TerminateInstances(region string, instances []string) (err error) {
 		config.WithRegion(region),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	// Create new EC2 client
 	svc := ec2.NewFromConfig(cfg)
@@ -329,18 +334,9 @@ func TerminateInstances(region string, instances []string) (err error) {
 
 func getSpotRequestType(requests []types.SpotInstanceRequest, id *string) types.SpotInstanceType {
 	if i := slices.IndexFunc(requests, func(request types.SpotInstanceRequest) bool {
-		return *request.SpotInstanceRequestId == *id
+		return request.SpotInstanceRequestId != nil && id != nil && *request.SpotInstanceRequestId == *id
 	}); i >= 0 {
 		return requests[i].Type
-	}
-	return ""
-}
-
-func getInstanceAZ(statuses []types.InstanceStatus, id *string) string {
-	if i := slices.IndexFunc(statuses, func(instance types.InstanceStatus) bool {
-		return *instance.InstanceId == *id
-	}); i >= 0 {
-		return *statuses[i].AvailabilityZone
 	}
 	return ""
 }

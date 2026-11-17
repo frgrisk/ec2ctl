@@ -39,27 +39,22 @@ var modifyCmd = &cobra.Command{
 		return validateInstanceArgs(args)
 	},
 	Example: "ec2ctl modify --type r6g.xlarge i-04f95703166d053ed",
-	Run:     modifyInstances,
+	RunE:    modifyInstances,
 }
 
 func init() {
 	rootCmd.AddCommand(modifyCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// modifyCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
 	modifyCmd.Flags().String("type", "", "Instance type to change the instance(s) to.")
 	_ = modifyCmd.MarkFlagRequired("type")
 }
 
-func modifyInstances(cmd *cobra.Command, instances []string) {
+func modifyInstances(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
-	accSum := getAccountSummary(regions, tags, "", instances)
+	accSum, err := getAccountSummary(regions, tags, "", instances)
+	if err != nil {
+		return err
+	}
 
 	instanceMap := make(map[string]*aws.Instance, len(instances))
 
@@ -78,19 +73,21 @@ func modifyInstances(cmd *cobra.Command, instances []string) {
 
 	t, err := cmd.Flags().GetString("type")
 	if err != nil {
-		fmt.Println("error parsing type flag:", err)
-		return
+		return err
 	}
 
-	for k, v := range instanceMap {
-		if v == nil {
-			fmt.Printf("instance %s not found\n", k)
-			continue
-		}
-		err := aws.ModifyInstanceType(v.Region, t, k)
-		if err != nil {
-			fmt.Printf("error modifying instance %s: %v\n", k, err)
-			return
+	// Check all requested IDs before modifying any instance.
+	for _, id := range instances {
+		if instanceMap[id] == nil {
+			return fmt.Errorf("instance %s not found; check --regions and --tag", id)
 		}
 	}
+	for _, id := range instances {
+		instance := instanceMap[id]
+		if err := aws.ModifyInstanceType(instance.Region, t, id); err != nil {
+			return fmt.Errorf("modify %s: %w", id, err)
+		}
+		fmt.Printf("%s  %s  instance type changed to %s\n", instance.Region, id, t)
+	}
+	return nil
 }

@@ -24,90 +24,86 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
-	"os"
+	"slices"
+	"sync"
 
-	"github.com/charmbracelet/huh/spinner"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/frgrisk/ec2ctl/cmd/types"
-
 	"github.com/spf13/cobra"
 )
 
-// statusCmd represents the status command
+var wide bool
+
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "List available instances and their statuses",
-	Long: `This command lists all available instances and their statuses.
-
-	Examples:
-	# Query all regions
-	ec2ctl status
-	# Query specific regions
-	ec2ctl status --regions us-east-1,ap-southeast-1
-	# Query specific tags
-	ec2ctl status --tag Environment:dev
-	`,
-	Run: func(_ *cobra.Command, args []string) {
-		// Get account summary based on regions and tags specified
-		accSum := getAccountSummary(regions, tags, aws.InstanceStatus, args)
-
-		if len(accSum) != 0 {
-			switch output {
-			case types.JSON:
-				jsonBytes, err := json.Marshal(accSum)
-				if err != nil {
-					fmt.Println("Error:", err)
-					return
-				}
-				fmt.Println(string(jsonBytes))
-			case types.Table:
-				accSum.Print()
-			}
-		} else {
-			errLabel := "No instances are available for " + aws.InstanceStatus + " command."
-			fmt.Println(errLabel)
+	Use:     "status [INSTANCE-ID...]",
+	Aliases: []string{"ls", "list"},
+	Short:   "See your fleet, grouped by region",
+	Long:    "Show matching instances with their state, type and private IP. Use --wide for all details.",
+	Example: `  ec2ctl status --regions us-east-1,ap-southeast-1
+  ec2ctl status --tag Environment=dev
+  ec2ctl status i-0123456789abcdef0 --wide
+  ec2ctl status -o json`,
+	Args: optionalInstanceArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		summary, err := getAccountSummary(regions, tags, aws.InstanceStatus, args)
+		if err != nil {
+			return err
 		}
+		if output == types.JSON {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(summary)
+		}
+		if len(summary) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "No instances match your filters. Check --regions, --tag and your AWS profile.")
+			return nil
+		}
+		summary.PrintWide(wide)
+		return nil
 	},
 }
 
-func getAccountSummary(regions []string, tags map[string]string, action string, instanceIDs []string) (accSum aws.AccountSummary) {
+func getAccountSummary(regions []string, tags map[string]string, action string, instanceIDs []string) (aws.AccountSummary, error) {
 	if len(regions) == 0 {
-		if err := spinner.New().
-			Title("Querying account regions...").
-			Accessible(os.Getenv("ACCESSIBLE") != "").
-			Action(func() {
-				regions = aws.GetRegions()
-			}).
-			Run(); err != nil {
-			log.Fatalf("Cannot render spinner: %v", err)
+		err := progress("Discovering enabled regions...", func() error {
+			var err error
+			regions, err = aws.GetRegions()
+			return err
+		})
+		if err != nil {
+			return nil, fmt.Errorf("discover regions: %w", err)
 		}
 	}
-
-	c := make(chan aws.RegionSummary)
-	for _, r := range regions {
-		go aws.GetDeployedInstances(c, r, tags, action, instanceIDs)
-	}
-	var regSum aws.RegionSummary
-
-	if err := spinner.New().
-		Title(fmt.Sprintf("Querying instances across %d regions...", len(regions))).
-		Accessible(os.Getenv("ACCESSIBLE") != "").
-		Action(func() {
-			for range regions {
-				regSum = <-c
-				if len(regSum.Instances) > 0 {
-					accSum = append(accSum, regSum)
+	regions = slices.Compact(slices.Sorted(slices.Values(regions)))
+	summary := make(aws.AccountSummary, 0, len(regions))
+	results := make([]aws.RegionSummary, len(regions))
+	failures := make([]error, len(regions))
+	err := progress(fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)), func() error {
+		var wg sync.WaitGroup
+		for i, region := range regions {
+			wg.Go(func() {
+				var err error
+				results[i], err = aws.GetDeployedInstances(region, tags, action, instanceIDs)
+				if err != nil {
+					failures[i] = fmt.Errorf("%s: %w", region, err)
 				}
-			}
-		}).
-		Run(); err != nil {
-		log.Fatalf("Cannot render spinner: %v", err)
+			})
+		}
+		wg.Wait()
+		return errors.Join(failures...)
+	})
+	if err != nil {
+		return nil, err
 	}
-	return
+	for _, result := range results {
+		if len(result.Instances) > 0 {
+			summary = append(summary, result)
+		}
+	}
+	return summary, nil
 }
 
 func init() {
+	statusCmd.Flags().BoolVarP(&wide, "wide", "w", false, "Include environment, placement, lifecycle and hibernation details")
 	rootCmd.AddCommand(statusCmd)
 }
