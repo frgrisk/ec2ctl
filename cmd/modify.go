@@ -64,34 +64,17 @@ func modifyInstances(cmd *cobra.Command, instances []string) error {
 		return err
 	}
 
-	instanceMap := make(map[string]*aws.Instance, len(instances))
-
-	for _, i := range instances {
-		instanceMap[i] = nil
-	}
-
-	for _, r := range accSum {
-		for n, i := range r.Instances {
-			_, ok := instanceMap[i.ID]
-			if ok {
-				instanceMap[i.ID] = &r.Instances[n]
-			}
-		}
-	}
-
 	t, err := cmd.Flags().GetString("type")
 	if err != nil {
 		return err
 	}
 
-	// Check all requested IDs before modifying any instance.
-	for _, id := range instances {
-		if instanceMap[id] == nil {
-			return fmt.Errorf("instance %s not found; check --regions and --tag", id)
-		}
+	targets, err := resolveExplicitInstances(accSum, instances)
+	if err != nil {
+		return err
 	}
-	for _, id := range instances {
-		instance := instanceMap[id]
+	for _, instance := range targets.ordered {
+		id := instance.ID
 		if err := aws.ModifyInstanceType(
 			cmd.Context(),
 			instance.Region,

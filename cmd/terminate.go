@@ -25,8 +25,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
@@ -66,38 +64,17 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 		return err
 	}
 
-	instanceMap := make(map[string]*aws.Instance, len(instances))
-	instanceRegionMap := make(map[string][]string)
-
-	for _, i := range instances {
-		instanceMap[i] = nil
-	}
-
-	for _, r := range accSum {
-		for n, i := range r.Instances {
-			_, ok := instanceMap[i.ID]
-			if ok {
-				instanceMap[i.ID] = &r.Instances[n]
-				if _, ok := instanceRegionMap[i.Region]; !ok {
-					instanceRegionMap[i.Region] = []string{}
-				}
-				instanceRegionMap[i.Region] = append(instanceRegionMap[i.Region], i.ID)
-			}
-		}
-	}
-
 	force, err := cmd.Flags().GetBool("force")
 	if err != nil {
 		return err
 	}
-	for _, id := range instances {
-		if instanceMap[id] == nil {
-			return fmt.Errorf("instance %s not found; check --regions and --tag", id)
-		}
+	targets, err := resolveExplicitInstances(accSum, instances)
+	if err != nil {
+		return err
 	}
 	ui.Fleet(accSum, false)
-	for _, k := range slices.Sorted(maps.Keys(instanceRegionMap)) {
-		v := instanceRegionMap[k]
+	for _, group := range targets.byRegion {
+		k, v := group.region, group.ids
 		if !force {
 			confirm, err := ui.Confirm(
 				cmd.Context(),
