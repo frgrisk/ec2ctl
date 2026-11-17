@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -84,12 +85,25 @@ func TestProgressCancellationJoinsAction(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			started := make(chan struct{})
+			cancelObserved := make(chan struct{})
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			releaseAction := func() { releaseOnce.Do(func() { close(release) }) }
 			exited := make(chan struct{})
 			done := make(chan error, 1)
+			t.Cleanup(func() {
+				cancel()
+				releaseAction()
+				for range done {
+				}
+			})
 			go func() {
+				defer close(done)
 				done <- ui.Progress(ctx, "scanning", func(ctx context.Context) error {
 					close(started)
 					<-ctx.Done()
+					close(cancelObserved)
+					<-release
 					defer close(exited)
 					return ctx.Err()
 				})
@@ -100,6 +114,17 @@ func TestProgressCancellationJoinsAction(t *testing.T) {
 				t.Fatal("action did not start")
 			}
 			cancel()
+			select {
+			case <-cancelObserved:
+			case <-time.After(2 * time.Second):
+				t.Fatal("action did not observe cancellation")
+			}
+			select {
+			case err := <-done:
+				t.Fatalf("progress returned while its action was still blocked: %v", err)
+			case <-time.After(50 * time.Millisecond):
+			}
+			releaseAction()
 			select {
 			case err := <-done:
 				if !errors.Is(err, context.Canceled) {

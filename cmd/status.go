@@ -95,26 +95,30 @@ func getAccountSummary(
 	summary := make(aws.AccountSummary, 0, len(regions))
 	results := make([]aws.RegionSummary, len(regions))
 	failures := make([]error, len(regions))
-	err := ui.Progress(ctx, fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)), func(ctx context.Context) error {
-		var wg sync.WaitGroup
-		for i, region := range regions {
-			wg.Go(func() {
-				var err error
-				results[i], err = aws.GetDeployedInstances(
-					ctx,
-					region,
-					tags,
-					action,
-					instanceIDs,
-				)
-				if err != nil {
-					failures[i] = fmt.Errorf("%s: %w", region, err)
-				}
-			})
-		}
-		wg.Wait()
-		return errors.Join(failures...)
-	})
+	err := ui.Progress(
+		ctx,
+		fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)),
+		func(ctx context.Context) error {
+			var wg sync.WaitGroup
+			for i, region := range regions {
+				wg.Go(func() {
+					var err error
+					results[i], err = aws.GetDeployedInstances(
+						ctx,
+						region,
+						tags,
+						action,
+						instanceIDs,
+					)
+					if err != nil {
+						failures[i] = fmt.Errorf("%s: %w", region, err)
+					}
+				})
+			}
+			wg.Wait()
+			return errors.Join(failures...)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}

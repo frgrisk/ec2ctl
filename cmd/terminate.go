@@ -112,9 +112,13 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 				continue
 			}
 		}
-		if err := ui.Progress(cmd.Context(), fmt.Sprintf("Requesting termination in %s...", k), func(ctx context.Context) error {
-			return aws.TerminateInstances(ctx, k, v)
-		}); err != nil {
+		if err := ui.Progress(
+			cmd.Context(),
+			fmt.Sprintf("Requesting termination in %s...", k),
+			func(ctx context.Context) error {
+				return aws.TerminateInstances(ctx, k, v)
+			},
+		); err != nil {
 			return fmt.Errorf("terminate in %s: %w", k, err)
 		}
 		ui.Printf("%s: termination requested for %v\n", k, v)
