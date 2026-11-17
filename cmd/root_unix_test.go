@@ -36,7 +36,7 @@ func TestSignalCancelsAccessibleConfirmation(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if r.Form.Get("Action") != describeInstancesAction {
+		if r.Form.Get("Action") != inventoryDescribeAction {
 			t.Error("cancelled confirmation sent an action request")
 			w.WriteHeader(http.StatusForbidden)
 			return

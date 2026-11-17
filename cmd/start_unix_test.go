@@ -64,7 +64,7 @@ func TestStartStopCancellationKeepsRegionalResults(t *testing.T) {
 					if isWest {
 						id = westID
 					}
-					if r.Form.Get("Action") == describeInstancesAction {
+					if r.Form.Get("Action") == inventoryDescribeAction {
 						fmt.Fprintf(
 							w,
 							`<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>%s</instanceId><instanceState><name>%s</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`,

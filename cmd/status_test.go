@@ -19,7 +19,7 @@ import (
 
 const (
 	cancellationWait        = 2 * time.Second
-	describeInstancesAction = "DescribeInstances"
+	inventoryDescribeAction = "DescribeInstances"
 	describeSpotAction      = "DescribeSpotInstanceRequests"
 	mockCredential          = "test"
 	mockTrue                = "true"
@@ -58,9 +58,9 @@ func TestCommandsCancelAWSRequests(t *testing.T) {
 		isRegional    bool
 	}{
 		{name: "discovery", command: statusCmd, blockedAction: "DescribeRegions"},
-		{name: "inventory", command: statusCmd, blockedAction: describeInstancesAction},
-		{name: "regional-inventory", command: statusCmd, blockedAction: describeInstancesAction, isRegional: true},
-		{name: "pagination", command: statusCmd, blockedAction: describeInstancesAction, hasSecondPage: true},
+		{name: "inventory", command: statusCmd, blockedAction: inventoryDescribeAction},
+		{name: "regional-inventory", command: statusCmd, blockedAction: inventoryDescribeAction, isRegional: true},
+		{name: "pagination", command: statusCmd, blockedAction: inventoryDescribeAction, hasSecondPage: true},
 		{name: "spot-inventory", command: statusCmd, blockedAction: describeSpotAction},
 		{name: "spot-pagination", command: statusCmd, blockedAction: describeSpotAction, hasSecondPage: true},
 		{name: "start-dry-run", command: startCmd, blockedAction: "StartInstances"},
@@ -101,9 +101,9 @@ func TestCommandsCancelAWSRequests(t *testing.T) {
 					}
 					return
 				}
-				if action == describeInstancesAction {
+				if action == inventoryDescribeAction {
 					nextToken := ""
-					if tc.hasSecondPage && tc.blockedAction == describeInstancesAction {
+					if tc.hasSecondPage && tc.blockedAction == inventoryDescribeAction {
 						nextToken = "<nextToken>page2</nextToken>"
 					}
 					spot := ""
@@ -200,7 +200,7 @@ func TestRegionalErrorPolicy(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "text/xml")
 				isWest := strings.Contains(r.Header.Get("Authorization"), "/"+west+"/ec2/")
-				if r.Form.Get("Action") == describeInstancesAction && action == aws.InstanceStart {
+				if r.Form.Get("Action") == inventoryDescribeAction && action == aws.InstanceStart {
 					fmt.Fprint(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>i-0123456789abcdef0</instanceId><instanceState><name>stopped</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
 					return
 				}
