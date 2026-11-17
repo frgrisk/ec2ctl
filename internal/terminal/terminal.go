@@ -17,13 +17,13 @@ import (
 // Terminal binds terminal policy to the streams used by one command.
 // Input capability controls confirmation safety independently of presentation.
 type Terminal struct {
-	input      io.Reader
-	output     io.Writer
-	errors     io.Writer
-	inputTTY   bool
-	color      bool
-	animate    bool
-	accessible bool
+	input          io.Reader
+	output         io.Writer
+	errors         io.Writer
+	isInputTTY     bool
+	isColorEnabled bool
+	canAnimate     bool
+	isAccessible   bool
 }
 
 // New captures stream capabilities and environment policy for a command.
@@ -33,13 +33,13 @@ func New(input io.Reader, output, errors io.Writer) *Terminal {
 	plain := accessible || os.Getenv("NO_COLOR") != ""
 	outputTTY := isTerminal(output)
 	return &Terminal{
-		input:      input,
-		output:     output,
-		errors:     errors,
-		inputTTY:   isTerminal(input),
-		accessible: accessible,
-		color:      outputTTY && !plain,
-		animate:    outputTTY && isTerminal(errors) && !plain,
+		input:          input,
+		output:         output,
+		errors:         errors,
+		isInputTTY:     isTerminal(input),
+		isAccessible:   accessible,
+		isColorEnabled: outputTTY && !plain,
+		canAnimate:     outputTTY && isTerminal(errors) && !plain,
 	}
 }
 
@@ -51,7 +51,7 @@ func isTerminal(stream any) bool {
 // RequireConfirmation rejects unsafe noninteractive lifecycle calls. Call it
 // before discovery, so refusal cannot send even a read-only AWS request.
 func (t *Terminal) RequireConfirmation(action string, force bool) error {
-	if !force && !t.inputTTY {
+	if !force && !t.isInputTTY {
 		return fmt.Errorf("cannot confirm %s without terminal input; use --force (-f) to skip confirmation", action)
 	}
 	return nil
@@ -64,7 +64,7 @@ func (t *Terminal) Confirm(title, description string) (bool, error) {
 	prompt := huh.NewConfirm().Title(title).Description(description).
 		Value(&confirmed).Affirmative("Yes").Negative("No")
 	var err error
-	if t.accessible {
+	if t.isAccessible {
 		err = prompt.RunAccessible(t.output, t.input)
 	} else {
 		// Match huh.Run's single-field presentation while binding command streams.
@@ -85,7 +85,13 @@ func (t *Terminal) Fleet(summary aws.AccountSummary, wide bool) {
 			width = w
 		}
 	}
-	renderFleet(t.output, summary, width, t.color, wide)
+	renderFleet(
+		t.output,
+		summary,
+		width,
+		t.isColorEnabled,
+		wide,
+	)
 }
 
 // Printf writes human-readable command results to the command's output stream.
@@ -96,7 +102,7 @@ func (t *Terminal) Printf(format string, args ...any) {
 // Progress runs action once, with animation only when both output streams are
 // terminals and the environment permits it. Animation never goes to stdout.
 func (t *Terminal) Progress(title string, action func() error) error {
-	if !t.animate {
+	if !t.canAnimate {
 		return action()
 	}
 	return spinner.New().Title(title).Output(t.errors).

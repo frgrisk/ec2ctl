@@ -66,7 +66,14 @@ func TestTerminalPresentationPolicy(t *testing.T) {
 			if err := New(strings.NewReader("yes\n"), output, diagnostics).RequireConfirmation("stop", false); err == nil {
 				t.Fatal("terminal output bypassed nonterminal input refusal")
 			}
-			ui.Fleet(aws.AccountSummary{{Region: testRegion, Instances: []aws.Instance{{Name: "test", Status: runningState, ID: testInstanceID}}}}, false)
+			ui.Fleet(aws.AccountSummary{{
+				Region: testRegion,
+				Instances: []aws.Instance{{
+					Name:   "test",
+					Status: runningState,
+					ID:     testInstanceID,
+				}},
+			}}, false)
 			wantColor := mode == normalMode || mode == redirectedErrors
 			if strings.Contains(output.String(), "\x1b") != wantColor {
 				t.Fatalf("color policy: %q", output.String())
@@ -77,8 +84,18 @@ func TestTerminalPresentationPolicy(t *testing.T) {
 			// All disabled modes must run the action exactly once and write no animation.
 			if mode != normalMode {
 				calls := 0
-				if err := ui.Progress("scanning", func() error { calls++; return nil }); err != nil || calls != 1 || diagnostics.Len() != 0 {
-					t.Fatalf("progress calls=%d err=%v diagnostics=%q", calls, err, diagnostics.String())
+				progressErr := ui.Progress("scanning", func() error {
+					calls++
+					return nil
+				})
+				hasExpectedActionResult := progressErr == nil && calls == 1
+				if !hasExpectedActionResult || diagnostics.Len() != 0 {
+					t.Fatalf(
+						"progress calls=%d err=%v diagnostics=%q",
+						calls,
+						progressErr,
+						diagnostics.String(),
+					)
 				}
 			}
 		})
@@ -88,18 +105,18 @@ func TestTerminalPresentationPolicy(t *testing.T) {
 // Answer after the real interactive renderer displays the question. Keep the
 // buffer named so io.Copy cannot bypass Write through a promoted ReaderFrom.
 type confirmationTerminal struct {
-	file     *os.File
-	input    *os.File
-	buffer   bytes.Buffer
-	answered bool
+	file        *os.File
+	input       *os.File
+	buffer      bytes.Buffer
+	hasAnswered bool
 }
 
 func (w *confirmationTerminal) Fd() uintptr { return w.file.Fd() }
 
 func (w *confirmationTerminal) Write(data []byte) (int, error) {
 	n, err := w.buffer.Write(data)
-	if !w.answered && strings.Contains(w.buffer.String(), "Proceed with selection?") {
-		w.answered = true
+	if !w.hasAnswered && strings.Contains(w.buffer.String(), "Proceed with selection?") {
+		w.hasAnswered = true
 		_, err = w.input.WriteString("y\r")
 	}
 	return n, err
@@ -120,8 +137,15 @@ func TestConfirmHidesKeyHelp(t *testing.T) {
 	var output bytes.Buffer
 	diagnostics := &confirmationTerminal{file: slave, input: master}
 	confirmed, err := New(slave, &output, diagnostics).Confirm("Proceed with selection?", "Review the selected instances.")
-	if err != nil || !confirmed || !diagnostics.answered {
-		t.Fatalf("confirmed=%t answered=%t err=%v output=%q", confirmed, diagnostics.answered, err, diagnostics.buffer.String())
+	hasConfirmedAnswer := confirmed && diagnostics.hasAnswered
+	if err != nil || !hasConfirmedAnswer {
+		t.Fatalf(
+			"confirmed=%t answered=%t err=%v output=%q",
+			confirmed,
+			diagnostics.hasAnswered,
+			err,
+			diagnostics.buffer.String(),
+		)
 	}
 	text := strings.Join(strings.Fields(ansi.Strip(diagnostics.buffer.String())), " ")
 	if !strings.Contains(text, "Proceed with selection?") || !strings.Contains(text, "Review the selected instances.") {

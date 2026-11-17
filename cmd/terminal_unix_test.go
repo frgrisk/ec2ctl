@@ -58,7 +58,12 @@ func TestLifecycleConfirmationGrouping(t *testing.T) {
 					if action == aws.InstanceStart {
 						state = "stopped"
 					}
-					fmt.Fprintf(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>%s</instanceId><instanceState><name>%s</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`, id, state)
+					fmt.Fprintf(
+						w,
+						`<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>%s</instanceId><instanceState><name>%s</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`,
+						id,
+						state,
+					)
 					return
 				}
 				if r.Form.Get("DryRun") == "true" {
@@ -86,19 +91,37 @@ func TestLifecycleConfirmationGrouping(t *testing.T) {
 				answers, want = []string{"no", "yes"}, want[1:]
 			}
 			responder := &promptResponder{input: master, answers: answers}
-			process := cliCommand(t, server.URL, action, regionsFlag, west+","+cliTestRegion, "i-00000000000000001", "i-00000000000000002")
+			process := cliCommand(
+				t,
+				server.URL,
+				action,
+				regionsFlag,
+				west+","+cliTestRegion,
+				"i-00000000000000001",
+				"i-00000000000000002",
+			)
 			process.Stdin, process.Stdout, process.Stderr = slave, responder, io.Discard
 			if err := process.Run(); err != nil {
 				t.Fatalf("command failed: %v; output=%s", err, responder.String())
 			}
 			if responder.answered != len(answers) {
-				t.Fatalf("questions=%d want=%d output=%s", responder.answered, len(answers), responder.String())
+				t.Fatalf(
+					"questions=%d want=%d output=%s",
+					responder.answered,
+					len(answers),
+					responder.String(),
+				)
 			}
 			mu.Lock()
 			defer mu.Unlock()
 			slices.Sort(mutations)
 			if !slices.Equal(mutations, want) {
-				t.Fatalf("mutations=%v want=%v output=%s", mutations, want, responder.String())
+				t.Fatalf(
+					"mutations=%v want=%v output=%s",
+					mutations,
+					want,
+					responder.String(),
+				)
 			}
 		})
 	}

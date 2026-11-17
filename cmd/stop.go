@@ -42,7 +42,12 @@ var stopCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return startStop(commandTerminal(cmd), args, aws.InstanceStop, force)
+		return startStop(
+			commandTerminal(cmd),
+			args,
+			aws.InstanceStop,
+			force,
+		)
 	},
 }
 

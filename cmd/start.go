@@ -48,7 +48,12 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return startStop(commandTerminal(cmd), args, aws.InstanceStart, force)
+		return startStop(
+			commandTerminal(cmd),
+			args,
+			aws.InstanceStart,
+			force,
+		)
 	},
 }
 
@@ -76,7 +81,13 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 
 	// Filter instances by region, tags, and current status
 	var err error
-	accSum, err = getAccountSummary(ui, regions, tags, action, instances)
+	accSum, err = getAccountSummary(
+		ui,
+		regions,
+		tags,
+		action,
+		instances,
+	)
 	if err != nil {
 		return err
 	}
@@ -86,7 +97,10 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 	}
 	ui.Fleet(accSum, false)
 	if !force {
-		confirmed, err := ui.Confirm("This action will "+action+" the instances above matching the filter. Would you like to proceed?", "")
+		confirmed, err := ui.Confirm(
+			"This action will "+action+" the instances above matching the filter. Would you like to proceed?",
+			"",
+		)
 		if err != nil {
 			return err
 		}
@@ -117,7 +131,13 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 			}
 		})
 	}
-	if err := ui.Progress(fmt.Sprintf("Sending %s request for %d instances...", action, numInstances), func() error { wg.Wait(); return nil }); err != nil {
+	if err := ui.Progress(
+		fmt.Sprintf("Sending %s request for %d instances...", action, numInstances),
+		func() error {
+			wg.Wait()
+			return nil
+		},
+	); err != nil {
 		return err
 	}
 	var failures []error
@@ -130,7 +150,11 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 	if err := errors.Join(failures...); err != nil {
 		return err
 	}
-	ui.Printf("%s request accepted for %d instances. Run ec2ctl status with the same filters to check progress.\n", action, numInstances)
+	ui.Printf(
+		"%s request accepted for %d instances. Run ec2ctl status with the same filters to check progress.\n",
+		action,
+		numInstances,
+	)
 	return nil
 }
 

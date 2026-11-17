@@ -168,9 +168,22 @@ func TestLifecycleRefusalNeverReachesAWS(t *testing.T) {
 	t.Cleanup(server.Close)
 	for _, action := range []string{aws.InstanceStart, aws.InstanceStop, terminateName} {
 		t.Run(action, func(t *testing.T) {
-			stdout, stderr, err := runCLI(t, server.URL, action, regionsFlag, cliTestRegion, "i-0123456789abcdef0")
-			if err == nil || stdout != "" || !strings.Contains(stderr, "--force") {
-				t.Fatalf("stdout=%q stderr=%q err=%v", stdout, stderr, err)
+			stdout, stderr, err := runCLI(
+				t,
+				server.URL,
+				action,
+				regionsFlag,
+				cliTestRegion,
+				"i-0123456789abcdef0",
+			)
+			isRefused := err != nil && strings.Contains(stderr, "--force")
+			if !isRefused || stdout != "" {
+				t.Fatalf(
+					"stdout=%q stderr=%q err=%v",
+					stdout,
+					stderr,
+					err,
+				)
 			}
 		})
 	}
@@ -187,7 +200,9 @@ func TestDemoUsesCommandOutput(t *testing.T) {
 	if err := demoCmd.RunE(demoCmd, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "Sample fleet") || !strings.Contains(output.String(), "EC2 FLEET") || diagnostics.Len() != 0 {
+	hasExpectedOutput := strings.Contains(output.String(), "Sample fleet") &&
+		strings.Contains(output.String(), "EC2 FLEET")
+	if !hasExpectedOutput || diagnostics.Len() != 0 {
 		t.Fatalf("output=%q diagnostics=%q", output.String(), diagnostics.String())
 	}
 }

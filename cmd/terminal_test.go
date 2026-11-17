@@ -19,9 +19,14 @@ func TestStatusUsesCommandOutput(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	for key, value := range map[string]string{
-		"AWS_ENDPOINT_URL_EC2": server.URL, "AWS_ACCESS_KEY_ID": "test", "AWS_SECRET_ACCESS_KEY": "test",
-		"AWS_SESSION_TOKEN": "", "AWS_PROFILE": "", "AWS_EC2_METADATA_DISABLED": "true",
-		"AWS_CONFIG_FILE": filepath.Join(t.TempDir(), "config"), "AWS_SHARED_CREDENTIALS_FILE": filepath.Join(t.TempDir(), "credentials"),
+		"AWS_ENDPOINT_URL_EC2":                server.URL,
+		"AWS_ACCESS_KEY_ID":                   "test",
+		"AWS_SECRET_ACCESS_KEY":               "test",
+		"AWS_SESSION_TOKEN":                   "",
+		"AWS_PROFILE":                         "",
+		"AWS_EC2_METADATA_DISABLED":           "true",
+		"AWS_CONFIG_FILE":                     filepath.Join(t.TempDir(), "config"),
+		"AWS_SHARED_CREDENTIALS_FILE":         filepath.Join(t.TempDir(), "credentials"),
 		"AWS_IGNORE_CONFIGURED_ENDPOINT_URLS": "false",
 	} {
 		t.Setenv(key, value)

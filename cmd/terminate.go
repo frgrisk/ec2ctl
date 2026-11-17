@@ -53,7 +53,13 @@ func init() {
 func terminateInstance(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
 	ui := commandTerminal(cmd)
-	accSum, err := getAccountSummary(ui, regions, tags, "", instances)
+	accSum, err := getAccountSummary(
+		ui,
+		regions,
+		tags,
+		"",
+		instances,
+	)
 	if err != nil {
 		return err
 	}

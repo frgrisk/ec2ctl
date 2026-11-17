@@ -14,8 +14,15 @@ import (
 
 func TestFleetLayout(t *testing.T) {
 	summary := aws.AccountSummary{{Region: testRegion, Instances: []aws.Instance{{
-		Name: "a very long instance name with 日本語 and extra text", ID: testInstanceID, Status: runningState,
-		Type: "t3.small", IP: "10.0.1.12", Environment: "development", AZ: "us-east-1a", Lifecycle: "on-demand", Hibernation: true,
+		Name:        "a very long instance name with 日本語 and extra text",
+		ID:          testInstanceID,
+		Status:      runningState,
+		Type:        "t3.small",
+		IP:          "10.0.1.12",
+		Environment: "development",
+		AZ:          "us-east-1a",
+		Lifecycle:   "on-demand",
+		Hibernation: true,
 	}}}}
 	for _, width := range []uint16{40, 80, 104, 120} {
 		for _, wide := range []bool{false, true} {
@@ -30,7 +37,12 @@ func TestFleetLayout(t *testing.T) {
 				}
 				for line := range strings.SplitSeq(text, "\n") {
 					if got := ansi.StringWidth(line); got > int(width) {
-						t.Errorf("line width %d exceeds %d: %s", got, width, line)
+						t.Errorf(
+							"line width %d exceeds %d: %s",
+							got,
+							width,
+							line,
+						)
 					}
 				}
 				if strings.Contains(text, "\x1b") {
@@ -45,7 +57,13 @@ func TestFleetLayout(t *testing.T) {
 }
 
 func TestFleetSanitizesTagValues(t *testing.T) {
-	summary := aws.AccountSummary{{Region: testRegion, Instances: []aws.Instance{{Name: "bad\x1b[31mname\nnext\tfield", Status: runningState}}}}
+	summary := aws.AccountSummary{{
+		Region: testRegion,
+		Instances: []aws.Instance{{
+			Name:   "bad\x1b[31mname\nnext\tfield",
+			Status: runningState,
+		}},
+	}}
 	ui, out := fleetTerminal(t, 120, false)
 	ui.Fleet(summary, false)
 	if strings.Contains(out.String(), "\x1b") || !strings.Contains(out.String(), "badname next field") {

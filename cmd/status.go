@@ -49,7 +49,13 @@ var statusCmd = &cobra.Command{
 	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui := commandTerminal(cmd)
-		summary, err := getAccountSummary(ui, regions, tags, aws.InstanceStatus, args)
+		summary, err := getAccountSummary(
+			ui,
+			regions,
+			tags,
+			aws.InstanceStatus,
+			args,
+		)
 		if err != nil {
 			return err
 		}
@@ -65,7 +71,13 @@ var statusCmd = &cobra.Command{
 	},
 }
 
-func getAccountSummary(ui *terminal.Terminal, regions []string, tags map[string]string, action string, instanceIDs []string) (aws.AccountSummary, error) {
+func getAccountSummary(
+	ui *terminal.Terminal,
+	regions []string,
+	tags map[string]string,
+	action string,
+	instanceIDs []string,
+) (aws.AccountSummary, error) {
 	if len(regions) == 0 {
 		err := ui.Progress("Discovering enabled regions...", func() error {
 			var err error

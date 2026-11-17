@@ -33,9 +33,17 @@ func TestRedirectedStreams(t *testing.T) {
 	if output.Len() != 0 || diagnostics.Len() != 0 {
 		t.Fatal("redirected progress wrote output")
 	}
-	ui.Fleet(aws.AccountSummary{{Region: "us-east-1", Instances: []aws.Instance{{Name: "test", Status: runningState}}}}, false)
+	ui.Fleet(aws.AccountSummary{{
+		Region: "us-east-1",
+		Instances: []aws.Instance{{
+			Name:   "test",
+			Status: runningState,
+		}},
+	}}, false)
 	ui.Printf("request accepted\n")
-	if !strings.Contains(output.String(), "EC2 FLEET") || !strings.Contains(output.String(), "request accepted") || strings.Contains(output.String(), "\x1b") {
+	hasExpectedOutput := strings.Contains(output.String(), "EC2 FLEET") &&
+		strings.Contains(output.String(), "request accepted")
+	if !hasExpectedOutput || strings.Contains(output.String(), "\x1b") {
 		t.Fatalf("redirected output: %q", output.String())
 	}
 	if diagnostics.Len() != 0 {
