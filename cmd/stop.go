@@ -30,28 +30,19 @@ import (
 
 // stopCmd represents the stop command
 var stopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "Stop one or more instances",
-	Long: `This command lists all matching running instance(s), and gives option to
-	stop the matched instance(s).
-
-	Examples:
-	# Stop all regions
-	ec2ctl stop
-	# Stop specific regions
-	ec2ctl stop --regions us-east-1,ap-southeast-1
-	# Stop specific tags
-	ec2ctl stop --tag Environment=dev
-	# Stop without prompting (scripts and agent sessions)
-	ec2ctl stop --regions us-east-1 --tag Environment=dev --force
-	`,
+	Use:   "stop [INSTANCE-ID...]",
+	Short: "Power down running instances",
+	Long:  "Find running instances, review the matches, and confirm before stopping them.",
+	Example: `  ec2ctl stop --regions us-east-1 --tag Environment=dev
+  ec2ctl stop --regions us-east-1 i-0123456789abcdef0
+  ec2ctl stop --regions us-east-1 --tag Environment=dev --force`,
+	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, err := cmd.Flags().GetBool("force")
 		if err != nil {
 			return err
 		}
-		startStop(args, aws.InstanceStop, force)
-		return nil
+		return startStop(args, aws.InstanceStop, force)
 	},
 }
 

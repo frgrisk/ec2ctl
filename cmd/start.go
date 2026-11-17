@@ -25,12 +25,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"regexp"
 	"sync"
 
-	"github.com/charmbracelet/huh/spinner"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 
 	"github.com/spf13/cobra"
@@ -38,100 +35,104 @@ import (
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start one or more instances",
-	Long: `This command lists all matching stopped instance(s), and gives option to
-	starts the matched instance(s).
-
-	Examples:
-	# Start all regions
-	ec2ctl start
-	# Start specific regions
-	ec2ctl start --regions us-east-1,ap-southeast-1
-	# Start specific tags
-	ec2ctl start --tag Environment=dev
-	# Start without prompting (scripts and agent sessions)
-	ec2ctl start --regions us-east-1 --tag Environment=dev --force
-	`,
+	Use:   "start [INSTANCE-ID...]",
+	Short: "Bring stopped instances online",
+	Long:  "Find stopped instances, review the matches, and confirm before starting them.",
+	Example: `  ec2ctl start --regions us-east-1 --tag Environment=dev
+  ec2ctl start --regions us-east-1 i-0123456789abcdef0
+  ec2ctl start --regions us-east-1 --tag Environment=dev --force`,
+	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, err := cmd.Flags().GetBool("force")
 		if err != nil {
 			return err
 		}
-		startStop(args, aws.InstanceStart, force)
-		return nil
+		return startStop(args, aws.InstanceStart, force)
 	},
 }
 
+var instanceIDPattern = regexp.MustCompile(`^i-([0-9a-f]{8}|[0-9a-f]{17})$`)
+
 func validateInstanceArgs(args []string) error {
-	if len(args) < 1 && len(regions) == 0 {
+	if len(args) == 0 {
 		return errors.New("at least one instance ID is required")
 	}
-	re := regexp.MustCompile("^i-[a-z|0-9]{8}|[a-z|0-9]{17}")
+	return optionalInstanceArgs(nil, args)
+}
+
+func optionalInstanceArgs(_ *cobra.Command, args []string) error {
 	for _, arg := range args {
-		matched := re.MatchString(arg)
-		if !matched || (len(arg) != 10 && len(arg) != 19) {
-			return fmt.Errorf("%q is not a valid instance id", arg)
+		if !instanceIDPattern.MatchString(arg) {
+			return fmt.Errorf("%q is not a valid instance ID; expected i- followed by 8 or 17 hexadecimal characters", arg)
 		}
 	}
 	return nil
 }
 
-func startStop(instances []string, action string, force bool) {
+func startStop(instances []string, action string, force bool) error {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
 
 	// Filter instances by region, tags, and current status
-	accSum = getAccountSummary(regions, tags, action, instances)
+	var err error
+	accSum, err = getAccountSummary(regions, tags, action, instances)
+	if err != nil {
+		return err
+	}
 	if len(accSum) == 0 {
-		fmt.Println("No instances are available for " + action + " command.")
-		return
+		fmt.Printf("No instances ready to %s match your filters. Try ec2ctl status with the same filters.\n", action)
+		return nil
 	}
 	if force {
 		accSum.Print()
 	} else {
-		accSum = accSum.Prompt(action)
+		accSum, err = accSum.Prompt(action)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Preprocessing is done to filter and group the instances by the region
-	// The grouping is done such that the maximum number of API calls correlates to the maximum nunber of available regions
-	// Initialised go routine for parallel api calls to increase speed
+	if len(accSum) == 0 {
+		fmt.Println("Cancelled. No instances changed.")
+		return nil
+	}
+
+	// Run regions concurrently, then print results in a stable order.
+	type actionResult struct {
+		err     error
+		message string
+	}
+	results := make([]actionResult, len(accSum))
 	numInstances := 0
-	for _, regionSum := range accSum {
+	for i, regionSum := range accSum {
 		numInstances += len(regionSum.Instances)
 		wg.Go(func() {
-			region := regionSum.Region
-			instanceIDs := aws.IDs(regionSum.Instances)
-			state, err := aws.StartStopInstance(region, action, instanceIDs)
+			ids := aws.IDs(regionSum.Instances)
+			states, err := aws.StartStopInstance(regionSum.Region, action, ids)
 			if err != nil {
-				fmt.Printf("Failed to %s instances %q in region %q: %v\n", action, instanceIDs, region, err)
+				results[i].err = fmt.Errorf("%s: cannot %s %v: %w", regionSum.Region, action, ids, err)
 				return
 			}
-			for _, stateChange := range state {
-				if stateChange.PreviousState.Name == stateChange.CurrentState.Name {
-					fmt.Printf(
-						"Instance %s was already in a %s state.\n",
-						*stateChange.InstanceId,
-						stateChange.PreviousState.Name,
-					)
-				} else {
-					fmt.Printf(
-						"Instance %s state changed from %s to %s.\n",
-						*stateChange.InstanceId,
-						stateChange.PreviousState.Name,
-						stateChange.CurrentState.Name,
-					)
-				}
+			for _, state := range states {
+				results[i].message += fmt.Sprintf("%s  %s  %s -> %s\n", regionSum.Region, *state.InstanceId, state.PreviousState.Name, state.CurrentState.Name)
 			}
 		})
 	}
-	if err := spinner.New().
-		Title(fmt.Sprintf("Performing %s on %d instances...", action, numInstances)).
-		Accessible(os.Getenv("ACCESSIBLE") != "").
-		Action(wg.Wait).
-		Run(); err != nil {
-		log.Fatalf("Cannot render spinner: %v", err)
+	if err := progress(fmt.Sprintf("Sending %s request for %d instances...", action, numInstances), func() error { wg.Wait(); return nil }); err != nil {
+		return err
 	}
+	var failures []error
+	for _, result := range results {
+		fmt.Print(result.message)
+		if result.err != nil {
+			failures = append(failures, result.err)
+		}
+	}
+	if err := errors.Join(failures...); err != nil {
+		return err
+	}
+	fmt.Printf("%s request accepted for %d instances. Run ec2ctl status with the same filters to check progress.\n", action, numInstances)
+	return nil
 }
 
 func init() {

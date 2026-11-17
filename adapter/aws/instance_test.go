@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/smithy-go"
@@ -57,9 +58,9 @@ func TestInstanceActionsDryRun(t *testing.T) {
 
 				var err error
 				if action == modify {
-					err = ModifyInstanceType("us-east-1", "t3.small", instanceID)
+					err = ModifyInstanceType(testRegion, "t3.small", instanceID)
 				} else {
-					_, err = StartStopInstance("us-east-1", action, []string{instanceID})
+					_, err = StartStopInstance(testRegion, action, []string{instanceID})
 				}
 				wantRequests := 1
 				if code == DryRunOperation {
@@ -133,11 +134,50 @@ func TestGetDeployedInstancesSortOrder(t *testing.T) {
 		}
 	})
 
-	result := make(chan RegionSummary, 1)
-	GetDeployedInstances(result, "us-east-1", nil, InstanceStatus, nil)
-	summary := <-result
+	summary, err := GetDeployedInstances(testRegion, nil, InstanceStatus, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{"dev-a-first", "dev-a-second", "dev-z", "prod-a"}
 	if got := IDs(summary.Instances); !slices.Equal(got, want) {
 		t.Errorf("instance order = %v, want %v", got, want)
+	}
+}
+
+func TestInventoryPaginationAndMissingFields(t *testing.T) {
+	var pages atomic.Int32
+	mockEC2(t, func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		if action := r.Form.Get("Action"); action != "DescribeInstances" {
+			t.Errorf("on-demand inventory requested unnecessary permission: %s", action)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		pages.Add(1)
+		w.Header().Set("Content-Type", "text/xml")
+		if r.Form.Get("NextToken") == "" {
+			fmt.Fprint(w, `<DescribeInstancesResponse><nextToken>page2</nextToken><reservationSet><item><instancesSet><item><instanceId>i-00000000000000001</instanceId><instanceState><name>running</name></instanceState><privateIpAddress>10.0.0.1</privateIpAddress><placement><availabilityZone>us-east-1a</availabilityZone></placement><hibernationOptions><configured>true</configured></hibernationOptions></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
+			return
+		}
+		if r.Form.Get("NextToken") != "page2" {
+			t.Errorf("unexpected page token: %s", r.Form.Get("NextToken"))
+		}
+		fmt.Fprint(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>i-00000000000000002</instanceId><instanceState><name>stopped</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
+	})
+	summary, err := GetDeployedInstances(testRegion, nil, InstanceStatus, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pages.Load() != 2 || len(summary.Instances) != 2 {
+		t.Fatalf("pages=%d instances=%v", pages.Load(), summary.Instances)
+	}
+	if first := summary.Instances[0]; first.IP != "10.0.0.1" || first.AZ != "us-east-1a" || !first.Hibernation {
+		t.Fatalf("missing first instance details: %+v", first)
+	}
+	if second := summary.Instances[1]; second.IP != "" || second.AZ != "" || second.Hibernation {
+		t.Fatalf("fields leaked across instances: %+v", second)
 	}
 }
