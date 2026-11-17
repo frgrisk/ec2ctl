@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
+	"github.com/muesli/cancelreader"
 	"golang.org/x/term"
 )
 
@@ -59,17 +60,38 @@ func (t *Terminal) RequireConfirmation(action string, force bool) error {
 
 // Confirm asks one question. Callers own selection and confirmation grouping.
 // Accessible prompts use stdout; interactive forms use stderr, as before.
-func (t *Terminal) Confirm(title, description string) (bool, error) {
+func (t *Terminal) Confirm(ctx context.Context, title, description string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("confirmation cancelled: %w", err)
+	}
 	var confirmed bool
 	prompt := huh.NewConfirm().Title(title).Description(description).
 		Value(&confirmed).Affirmative("Yes").Negative("No")
 	var err error
 	if t.isAccessible {
-		err = prompt.RunAccessible(t.output, t.input)
+		reader, readErr := cancelreader.NewReader(t.input)
+		if readErr != nil {
+			return false, fmt.Errorf("confirmation input: %w", readErr)
+		}
+		defer reader.Close()
+		cancelled := make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			reader.Cancel()
+			close(cancelled)
+		})
+		defer func() {
+			if !stop() {
+				<-cancelled
+			}
+		}()
+		err = prompt.RunAccessible(t.output, reader)
 	} else {
 		// Match huh.Run's single-field presentation while binding command streams.
 		err = huh.NewForm(huh.NewGroup(prompt)).WithShowHelp(false).
-			WithInput(t.input).WithOutput(t.errors).Run()
+			WithInput(t.input).WithOutput(t.errors).RunWithContext(ctx)
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
 	}
 	if err != nil {
 		return false, fmt.Errorf("confirmation cancelled: %w", err)
@@ -101,10 +123,32 @@ func (t *Terminal) Printf(format string, args ...any) {
 
 // Progress runs action once, with animation only when both output streams are
 // terminals and the environment permits it. Animation never goes to stdout.
-func (t *Terminal) Progress(title string, action func() error) error {
-	if !t.canAnimate {
-		return action()
+func (t *Terminal) Progress(ctx context.Context, title string, action func(context.Context) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return spinner.New().Title(title).Output(t.errors).
-		ActionWithErr(func(_ context.Context) error { return action() }).Run()
+	if !t.canAnimate {
+		return action(ctx)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var actionErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		actionErr = action(ctx)
+	}()
+	err := spinner.New().Title(title).Output(t.errors).Context(ctx).
+		ActionWithErr(func(context.Context) error {
+			<-done
+			return actionErr
+		}).Run()
+	// The spinner can exit on a signal before its action returns. Cancel the
+	// action and join it before callers read its results or leave the command.
+	cancel()
+	<-done
+	if actionErr != nil {
+		return actionErr
+	}
+	return err
 }

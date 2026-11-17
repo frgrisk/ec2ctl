@@ -23,6 +23,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -49,6 +50,7 @@ var startCmd = &cobra.Command{
 			return err
 		}
 		return startStop(
+			cmd.Context(),
 			commandTerminal(cmd),
 			args,
 			aws.InstanceStart,
@@ -75,13 +77,20 @@ func optionalInstanceArgs(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func startStop(ui *terminal.Terminal, instances []string, action string, force bool) error {
+func startStop(
+	ctx context.Context,
+	ui *terminal.Terminal,
+	instances []string,
+	action string,
+	force bool,
+) error {
 	var accSum aws.AccountSummary
 	var wg sync.WaitGroup
 
 	// Filter instances by region, tags, and current status
 	var err error
 	accSum, err = getAccountSummary(
+		ctx,
 		ui,
 		regions,
 		tags,
@@ -98,6 +107,7 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 	ui.Fleet(accSum, false)
 	if !force {
 		confirmed, err := ui.Confirm(
+			ctx,
 			"This action will "+action+" the instances above matching the filter. Would you like to proceed?",
 			"",
 		)
@@ -117,23 +127,31 @@ func startStop(ui *terminal.Terminal, instances []string, action string, force b
 	}
 	results := make([]actionResult, len(accSum))
 	numInstances := 0
-	for i, regionSum := range accSum {
+	for _, regionSum := range accSum {
 		numInstances += len(regionSum.Instances)
-		wg.Go(func() {
-			ids := aws.IDs(regionSum.Instances)
-			states, err := aws.StartStopInstance(regionSum.Region, action, ids)
-			if err != nil {
-				results[i].err = fmt.Errorf("%s: cannot %s %v: %w", regionSum.Region, action, ids, err)
-				return
-			}
-			for _, state := range states {
-				results[i].message += fmt.Sprintf("%s  %s  %s -> %s\n", regionSum.Region, *state.InstanceId, state.PreviousState.Name, state.CurrentState.Name)
-			}
-		})
 	}
 	if err := ui.Progress(
+		ctx,
 		fmt.Sprintf("Sending %s request for %d instances...", action, numInstances),
-		func() error {
+		func(ctx context.Context) error {
+			for i, regionSum := range accSum {
+				wg.Go(func() {
+					ids := aws.IDs(regionSum.Instances)
+					states, err := aws.StartStopInstance(
+						ctx,
+						regionSum.Region,
+						action,
+						ids,
+					)
+					if err != nil {
+						results[i].err = fmt.Errorf("%s: cannot %s %v: %w", regionSum.Region, action, ids, err)
+						return
+					}
+					for _, state := range states {
+						results[i].message += fmt.Sprintf("%s  %s  %s -> %s\n", regionSum.Region, *state.InstanceId, state.PreviousState.Name, state.CurrentState.Name)
+					}
+				})
+			}
 			wg.Wait()
 			return nil
 		},

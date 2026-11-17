@@ -34,9 +34,8 @@ func GetInstanceRegion(accSum AccountSummary, id string) (string, error) {
 }
 
 // GetRegions is a function to retrieve all active regions in an account
-func GetRegions() ([]string, error) {
+func GetRegions(ctx context.Context) ([]string, error) {
 	var regions []string
-	ctx := context.TODO()
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, err

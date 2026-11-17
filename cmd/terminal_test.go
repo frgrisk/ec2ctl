@@ -39,6 +39,7 @@ func TestStatusUsesCommandOutput(t *testing.T) {
 			output = format
 			var out, diagnostics strings.Builder
 			command := &cobra.Command{}
+			command.SetContext(t.Context())
 			command.SetOut(&out)
 			command.SetErr(&diagnostics)
 			if err := statusCmd.RunE(command, nil); err != nil {
