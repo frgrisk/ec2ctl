@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -16,11 +18,13 @@ import (
 )
 
 const (
-	cliTestRegion = "us-east-1"
-	regionsFlag   = "--regions"
-	modifyAction  = "modify"
-	actionFailure = "action"
-	terminateName = "terminate"
+	cliTestRegion           = "us-east-1"
+	regionsFlag             = "--regions"
+	modifyAction            = "modify"
+	actionFailure           = "action"
+	terminateName           = "terminate"
+	describeInstancesAction = "DescribeInstances"
+	dryRunEnabled           = "true"
 )
 
 func TestUsabilityProcess(t *testing.T) {
@@ -204,5 +208,118 @@ func TestDemoUsesCommandOutput(t *testing.T) {
 		strings.Contains(output.String(), "EC2 FLEET")
 	if !hasExpectedOutput || diagnostics.Len() != 0 {
 		t.Fatalf("output=%q diagnostics=%q", output.String(), diagnostics.String())
+	}
+}
+
+func TestExplicitInstancesValidateBeforeMutation(t *testing.T) {
+	const validID = "i-00000000000000001"
+	const missingID = "i-00000000000000002"
+	for _, action := range []string{terminateName, modifyAction} {
+		t.Run(action, func(t *testing.T) {
+			var queries, mutations atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+					return
+				}
+				w.Header().Set("Content-Type", "text/xml")
+				if r.Form.Get("Action") == describeInstancesAction {
+					queries.Add(1)
+					fmt.Fprint(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>`+
+						validID+`</instanceId><instanceState><name>stopped</name></instanceState></item>`+
+						`</instancesSet></item></reservationSet></DescribeInstancesResponse>`)
+					return
+				}
+				// Count every operation attempt, including dry runs.
+				mutations.Add(1)
+				fmt.Fprint(w, `<Response><return>true</return></Response>`)
+			}))
+			t.Cleanup(server.Close)
+			args := []string{action, regionsFlag, cliTestRegion, validID, missingID}
+			if action == terminateName {
+				args = append(args, "--force")
+			} else {
+				args = append(args, "--type", "t3.small")
+			}
+			stdout, stderr, err := runCLI(t, server.URL, args...)
+			if err == nil {
+				t.Fatalf("incomplete target set succeeded: %s", stdout)
+			}
+			if !strings.Contains(stderr, "instance "+missingID+" not found; check --regions and --tag") {
+				t.Fatalf("unexpected error: %s", stderr)
+			}
+			if queries.Load() == 0 {
+				t.Fatal("command did not query inventory")
+			}
+			if count := mutations.Load(); count != 0 {
+				t.Fatalf("incomplete target set sent %d operation requests", count)
+			}
+			if stdout != "" {
+				t.Fatalf("incomplete target set wrote success output: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestExplicitInstancesPreserveMutationOrder(t *testing.T) {
+	const firstID = "i-00000000000000001"
+	const secondID = "i-00000000000000002"
+	for _, action := range []string{terminateName, modifyAction} {
+		t.Run(action, func(t *testing.T) {
+			var mu sync.Mutex
+			operations := []string{}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+					return
+				}
+				w.Header().Set("Content-Type", "text/xml")
+				if r.Form.Get("Action") == describeInstancesAction {
+					fmt.Fprint(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet>`+
+						`<item><instanceId>`+firstID+`</instanceId></item>`+
+						`<item><instanceId>`+secondID+`</instanceId></item>`+
+						`</instancesSet></item></reservationSet></DescribeInstancesResponse>`)
+					return
+				}
+				if r.Form.Get("DryRun") == dryRunEnabled {
+					w.WriteHeader(http.StatusForbidden)
+					fmt.Fprint(w, `<Response><Errors><Error><Code>DryRunOperation</Code>`+
+						`<Message>dry run</Message></Error></Errors></Response>`)
+					return
+				}
+				ids := []string{}
+				if id := r.Form.Get("InstanceId"); id != "" {
+					ids = append(ids, id)
+				}
+				for i := 1; r.Form.Has(fmt.Sprintf("InstanceId.%d", i)); i++ {
+					ids = append(ids, r.Form.Get(fmt.Sprintf("InstanceId.%d", i)))
+				}
+				mu.Lock()
+				operations = append(operations, strings.Join(ids, ","))
+				mu.Unlock()
+				fmt.Fprint(w, `<Response><return>true</return></Response>`)
+			}))
+			t.Cleanup(server.Close)
+			args := []string{action, regionsFlag, cliTestRegion, secondID, firstID, secondID}
+			want := []string{secondID, firstID, secondID}
+			if action == terminateName {
+				args = append(args, "--force")
+				want = []string{firstID + "," + secondID}
+			} else {
+				args = append(args, "--type", "t3.small")
+			}
+			stdout, stderr, err := runCLI(t, server.URL, args...)
+			if err != nil {
+				t.Fatalf("command failed: %v; stderr=%s", err, stderr)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if !slices.Equal(operations, want) {
+				t.Fatalf("operations=%v want=%v", operations, want)
+			}
+			if !strings.Contains(stdout, cliTestRegion) {
+				t.Fatalf("missing region in output: %s", stdout)
+			}
+		})
 	}
 }
