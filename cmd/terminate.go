@@ -25,11 +25,9 @@ package cmd
 import (
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +52,8 @@ func init() {
 
 func terminateInstance(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
-	accSum, err := getAccountSummary(regions, tags, "", instances)
+	ui := commandTerminal(cmd)
+	accSum, err := getAccountSummary(ui, regions, tags, "", instances)
 	if err != nil {
 		return err
 	}
@@ -88,37 +87,28 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 			return fmt.Errorf("instance %s not found; check --regions and --tag", id)
 		}
 	}
-	accSum.Print()
+	ui.Fleet(accSum, false)
 	for _, k := range slices.Sorted(maps.Keys(instanceRegionMap)) {
 		v := instanceRegionMap[k]
 		if !force {
-			var confirm bool
-			prompt := huh.NewConfirm().
-				Title(fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k)).
-				Value(&confirm).
-				Description("Termination is permanent and cannot be undone.").
-				Affirmative("Yes").
-				Negative("No")
-			var err error
-			if os.Getenv("ACCESSIBLE") != "" || os.Getenv("TERM") == "dumb" {
-				err = prompt.RunAccessible(os.Stdout, os.Stdin)
-			} else {
-				err = prompt.Run()
-			}
+			confirm, err := ui.Confirm(
+				fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k),
+				"Termination is permanent and cannot be undone.")
 			if err != nil {
-				return fmt.Errorf("confirmation cancelled: %w", err)
+				return err
 			}
+
 			if !confirm {
-				fmt.Printf("%s: cancelled. No instances terminated.\n", k)
+				ui.Printf("%s: cancelled. No instances terminated.\n", k)
 				continue
 			}
 		}
-		if err := progress(fmt.Sprintf("Requesting termination in %s...", k), func() error {
+		if err := ui.Progress(fmt.Sprintf("Requesting termination in %s...", k), func() error {
 			return aws.TerminateInstances(k, v)
 		}); err != nil {
 			return fmt.Errorf("terminate in %s: %w", k, err)
 		}
-		fmt.Printf("%s: termination requested for %v\n", k, v)
+		ui.Printf("%s: termination requested for %v\n", k, v)
 	}
 	return nil
 }

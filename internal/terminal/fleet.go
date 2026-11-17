@@ -1,17 +1,16 @@
-package aws
+package terminal
 
 import (
 	"cmp"
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
-	"golang.org/x/term"
+	"github.com/frgrisk/ec2ctl/adapter/aws"
 )
 
 const (
@@ -21,21 +20,6 @@ const (
 	fixedColumnWidth  = 81
 	stateColumn       = 2
 )
-
-// PrintWide displays a fleet overview, adapting to the terminal width.
-func (u AccountSummary) PrintWide(wide bool) {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil || width <= 0 {
-		width = defaultTableWidth
-	}
-	color := term.IsTerminal(int(os.Stdout.Fd())) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb" && os.Getenv("ACCESSIBLE") == ""
-	renderFleet(os.Stdout, u, width, color, wide)
-}
-
-// WriteTable prints a single region using the same responsive fleet view.
-func WriteTable(title string, data []Instance) {
-	AccountSummary{{Region: title, Instances: data}}.Print()
-}
 
 func countLabel(count int, noun string) string {
 	if count != 1 {
@@ -76,7 +60,7 @@ func stateColor(state string) string {
 	}
 }
 
-func renderFleet(w io.Writer, summary AccountSummary, width int, color, wide bool) {
+func renderFleet(w io.Writer, summary aws.AccountSummary, width int, color, wide bool) {
 	total := 0
 	counts := make(map[string]int)
 	for _, region := range summary {

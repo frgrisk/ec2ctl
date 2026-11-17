@@ -39,8 +39,9 @@ var demoCmd = &cobra.Command{
 			_, err := fmt.Fprintln(cmd.OutOrStdout())
 			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Sample fleet · no AWS requests")
-		summary.PrintWide(wide)
+		ui := commandTerminal(cmd)
+		ui.Printf("Sample fleet · no AWS requests\n")
+		ui.Fleet(summary, wide)
 		return nil
 	},
 }
