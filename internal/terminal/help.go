@@ -11,6 +11,7 @@ import (
 const (
 	defaultHelpWidth        = 80
 	helpIndent              = 2
+	helpDescriptionIndent   = 4
 	minHelpDescriptionWidth = 24
 )
 
@@ -75,7 +76,12 @@ func (t *Terminal) helpRows(rows [][2]string, width int) {
 		}
 		if width-descriptionColumn < minHelpDescriptionWidth {
 			fmt.Fprintln(t.output, "  "+row[0])
-			t.helpText(row[1], "    ", width)
+			indentWidth := helpDescriptionIndent
+			// Retain long tokens while reducing indentation enough to fit them.
+			for word := range strings.FieldsSeq(row[1]) {
+				indentWidth = min(indentWidth, max(0, width-ansi.StringWidth(word)))
+			}
+			t.helpText(row[1], strings.Repeat(" ", indentWidth), width)
 			continue
 		}
 		padding := strings.Repeat(" ", labelWidth-ansi.StringWidth(row[0])+helpIndent)

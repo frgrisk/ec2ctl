@@ -17,7 +17,7 @@ func TestHelpWidthAndPolicy(t *testing.T) {
 	const dumbPolicy = "dumb"
 	const noColorPolicy = "no-color"
 	const example = "  ec2ctl modify --regions us-east-1 --type t3.small i-0123456789abcdef0"
-	sections := []HelpSection{{Title: "Flags:", Text: "Readable prose with 日本語 that wraps at the output terminal width.\n\n  source <(ec2ctl completion bash)", Rows: [][2]string{{"--regions strings", "comma-separated regions to operate in with all words preserved"}, {"-o, --output string", "status output format with a continuation\nsecond paragraph"}}}, {Title: "Examples:", Literal: "  # A task label that is long enough to wrap at forty columns\n" + example}}
+	sections := []HelpSection{{Title: "Flags:", Text: "Readable prose with 日本語 that wraps at the output terminal width.\n\n  source <(ec2ctl completion bash)", Rows: [][2]string{{"--regions strings", "comma-separated regions to operate in with all words preserved"}, {"-o, --output string", "status output format with a continuation\nsecond paragraph"}, {"--tag stringToString", "query by tags (e.g. Environment=dev,Name=dev.example.com)"}}}, {Title: "Examples:", Literal: "  # A task label that is long enough to wrap at forty columns\n" + example}}
 	for _, width := range []uint16{40, 80, 120} {
 		for _, policy := range []string{"color", noColorPolicy, accessiblePolicy, dumbPolicy} {
 			t.Run(fmt.Sprintf("%d/%s", width, policy), func(t *testing.T) {
