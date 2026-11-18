@@ -16,8 +16,9 @@ func TestHelpWidthAndPolicy(t *testing.T) {
 	const accessiblePolicy = "accessible"
 	const dumbPolicy = "dumb"
 	const noColorPolicy = "no-color"
-	const example = "  ec2ctl modify --regions us-east-1 --type t3.small i-0123456789abcdef0"
-	sections := []HelpSection{{Title: "Flags:", Text: "Readable prose with 日本語 that wraps at the output terminal width.\n\n  source <(ec2ctl completion bash)", Rows: [][2]string{{"--regions strings", "comma-separated regions to operate in with all words preserved"}, {"-o, --output string", "status output format with a continuation\nsecond paragraph"}, {"--tag stringToString", "query by tags (e.g. Environment=dev,Name=dev.example.com)"}}}, {Title: "Examples:", Literal: "  # A task label that is long enough to wrap at forty columns\n" + example}}
+	const example = "  ec2ctl status --tag 'Name=api dev,Environment=development' i-0123456789abcdef0 i-00000000000000001"
+	const quotedConfig = `  ec2ctl --config "/tmp/config with spaces.yaml" status --tag "Name=api dev"`
+	sections := []HelpSection{{Title: "Flags:", Text: "Readable prose with 日本語 that wraps at the output terminal width.\n\n  source <(ec2ctl completion bash)", Rows: [][2]string{{"--regions strings", "comma-separated regions to operate in with all words preserved"}, {"-o, --output string", "status output format with a continuation\nsecond paragraph"}, {"--tag stringToString", "query by tags (e.g. Environment=dev,Name=dev.example.com)"}}}, {Title: "Examples:", Literal: "  # A task label that is long enough to wrap at forty columns\n" + example + "\n" + quotedConfig}}
 	for _, width := range []uint16{40, 80, 120} {
 		for _, policy := range []string{"color", noColorPolicy, accessiblePolicy, dumbPolicy} {
 			t.Run(fmt.Sprintf("%d/%s", width, policy), func(t *testing.T) {
@@ -40,11 +41,11 @@ func TestHelpWidthAndPolicy(t *testing.T) {
 				if !strings.Contains(text, "\n\n  source <(ec2ctl completion bash)\n") {
 					t.Fatal("embedded completion syntax lost indentation")
 				}
-				if !strings.Contains(text, example+"\n") {
+				if !strings.Contains(text, example+"\n") || !strings.Contains(text, quotedConfig+"\n") {
 					t.Fatal("example syntax was split")
 				}
 				for line := range strings.SplitSeq(text, "\n") {
-					if line != example && ansi.StringWidth(line) > int(width) {
+					if line != example && line != quotedConfig && ansi.StringWidth(line) > int(width) {
 						t.Errorf("over-width prose: %q", line)
 					}
 				}

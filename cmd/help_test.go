@@ -24,6 +24,12 @@ func TestHelpNavigationNeedsNoAWS(t *testing.T) {
 			t.Fatalf("%v differs from no-args help: %v %s\n%s", args, runErr, stderr, out)
 		}
 	}
+	rootText := strings.Join(strings.Fields(root), " ")
+	for _, fact := range []string{"Instance IDs are optional for status, start and stop.", "Omit --regions to search all enabled regions.", "status and demo output format: table or json"} {
+		if !strings.Contains(rootText, fact) {
+			t.Errorf("missing root guidance %q:\n%s", fact, root)
+		}
+	}
 	previous := -1
 	for _, heading := range []string{"Start here: ec2ctl demo", "Explore:", "Change instances:", "Shell and help tools:"} {
 		index := strings.Index(root, heading)
@@ -48,10 +54,26 @@ func TestHelpNavigationNeedsNoAWS(t *testing.T) {
 			t.Errorf("alias %s: %v %s %s", alias, runErr, stderr, out)
 		}
 	}
+	completionRoot := &cobra.Command{Use: "ec2ctl"}
+	completionRoot.InitDefaultCompletionCmd()
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		out, _, runErr := runCLI(t, server.URL, "completion", shell)
 		if runErr != nil || out == "" || strings.Contains(out, "\x1b") {
 			t.Errorf("completion %s: %v", shell, runErr)
+		}
+		nested, _, nestedErr := runCLI(t, server.URL, "completion", shell, "--help")
+		viaHelp, _, helpErr := runCLI(t, server.URL, "help", "completion", shell)
+		if nestedErr != nil || helpErr != nil || nested != viaHelp {
+			t.Fatalf("nested completion %s help differs: %v %v", shell, nestedErr, helpErr)
+		}
+		metadata, _, findErr := completionRoot.Find([]string{"completion", shell})
+		if findErr != nil {
+			t.Fatal(findErr)
+		}
+		for line := range strings.SplitSeq(metadata.Long, "\n") {
+			if strings.HasPrefix(line, "\t") && !strings.Contains(nested, line+"\n") {
+				t.Errorf("%s shell snippet changed: %q", shell, line)
+			}
 		}
 	}
 	if requests.Load() != 0 {

@@ -53,7 +53,9 @@ var rootCmd = &cobra.Command{
 Start here: ec2ctl demo
 Explore a sample fleet without AWS requests.
 
-Find instances by region, tag or ID. Start, stop, resize or terminate them.`,
+Find instances by region, tag or ID. Start, stop, resize or terminate them.
+Instance IDs are optional for status, start and stop.
+Omit --regions to search all enabled regions.`,
 	Example: `  # Find development instances
   ec2ctl status --tag Environment=dev
 
@@ -87,8 +89,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	// Global Flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ec2ctl.yaml)")
-	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
-	rootCmd.PersistentFlags().VarP(&output, "output", "o", "status output format: table or json")
+	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated AWS regions (default: all enabled regions)")
+	rootCmd.PersistentFlags().VarP(&output, "output", "o", "status and demo output format: table or json")
 	rootCmd.PersistentFlags().StringToStringVar(&tags, "tag", map[string]string{}, "query by tags - specified as key=value pairs (e.g. Environment=dev,Name=dev.example.com)")
 
 	log.SetReportTimestamp(false)
