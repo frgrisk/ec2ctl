@@ -50,14 +50,21 @@ var rootCmd = &cobra.Command{
 	Short: "Your EC2 fleet, at a glance",
 	Long: `ec2ctl — your EC2 fleet, at a glance.
 
-Find your instances. Bring them online. Power down when you are done.
-Filter by region, tag or instance ID; review matches before taking action.`,
-	Example: `  ec2ctl demo
-  ec2ctl status --regions us-east-1
+Start here: ec2ctl demo
+Explore a sample fleet without AWS requests.
+
+Find instances by region, tag or ID. Start, stop, resize or terminate them.
+Instance IDs are optional for status, start and stop.
+Omit --regions to search all enabled regions.`,
+	Example: `  # Find development instances
   ec2ctl status --tag Environment=dev
-  ec2ctl start --regions us-east-1 --tag Environment=dev
-  ec2ctl stop --regions us-east-1 i-0123456789abcdef0
-  ec2ctl status --output json`,
+
+  # Export fleet data
+  ec2ctl status --output json
+
+  # Start stopped development instances
+  ec2ctl start --regions us-east-1 \
+    --tag Environment=dev`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -72,11 +79,19 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.AddGroup(
+		&cobra.Group{ID: exploreGroup, Title: "Explore:"},
+		&cobra.Group{ID: changeGroup, Title: "Change instances:"},
+		&cobra.Group{ID: toolsGroup, Title: "Shell and help tools:"},
+	)
+	rootCmd.SetHelpCommandGroupID(toolsGroup)
+	rootCmd.SetCompletionCommandGroupID(toolsGroup)
+	rootCmd.SetHelpFunc(commandHelp)
 	cobra.OnInitialize(initConfig)
 	// Global Flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ec2ctl.yaml)")
-	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated list of AWS regions to operate in (default is all regions)")
-	rootCmd.PersistentFlags().VarP(&output, "output", "o", "status output format: table or json")
+	rootCmd.PersistentFlags().StringSliceVar(&regions, "regions", []string{}, "comma-separated AWS regions (default: all enabled regions)")
+	rootCmd.PersistentFlags().VarP(&output, "output", "o", "status and demo output format: table or json")
 	rootCmd.PersistentFlags().StringToStringVar(&tags, "tag", map[string]string{}, "query by tags - specified as key=value pairs (e.g. Environment=dev,Name=dev.example.com)")
 
 	log.SetReportTimestamp(false)

@@ -32,14 +32,20 @@ import (
 
 // modifyCmd represents the modify command
 var modifyCmd = &cobra.Command{
-	Use:   "modify INSTANCE-ID [INSTANCE-ID...]",
-	Short: "Modify one or more instances",
-	Long:  `This command modifies the specified instance(s).`,
+	GroupID: changeGroup,
+	Use:     "modify INSTANCE-ID [INSTANCE-ID...]",
+	Short:   "Change instance type for explicit IDs",
+	Long: `Change the instance type of one or more explicit instance IDs.
+Requires --type. Runs without a confirmation prompt.
+Use status to check the IDs, regions and current types first.`,
 	Args: func(_ *cobra.Command, args []string) error {
 		return validateInstanceArgs(args)
 	},
-	Example: "ec2ctl modify --type r6g.xlarge i-04f95703166d053ed",
-	RunE:    modifyInstances,
+	Example: `  # Resize a specific instance
+  ec2ctl modify --regions us-east-1 \
+    --type t3.small \
+    i-0123456789abcdef0`,
+	RunE: modifyInstances,
 }
 
 func init() {
