@@ -23,6 +23,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +51,7 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui := commandTerminal(cmd)
 		summary, err := getAccountSummary(
+			cmd.Context(),
 			ui,
 			regions,
 			tags,
@@ -72,6 +74,7 @@ var statusCmd = &cobra.Command{
 }
 
 func getAccountSummary(
+	ctx context.Context,
 	ui *terminal.Terminal,
 	regions []string,
 	tags map[string]string,
@@ -79,9 +82,9 @@ func getAccountSummary(
 	instanceIDs []string,
 ) (aws.AccountSummary, error) {
 	if len(regions) == 0 {
-		err := ui.Progress("Discovering enabled regions...", func() error {
+		err := ui.Progress(ctx, "Discovering enabled regions...", func(ctx context.Context) error {
 			var err error
-			regions, err = aws.GetRegions()
+			regions, err = aws.GetRegions(ctx)
 			return err
 		})
 		if err != nil {
@@ -92,20 +95,30 @@ func getAccountSummary(
 	summary := make(aws.AccountSummary, 0, len(regions))
 	results := make([]aws.RegionSummary, len(regions))
 	failures := make([]error, len(regions))
-	err := ui.Progress(fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)), func() error {
-		var wg sync.WaitGroup
-		for i, region := range regions {
-			wg.Go(func() {
-				var err error
-				results[i], err = aws.GetDeployedInstances(region, tags, action, instanceIDs)
-				if err != nil {
-					failures[i] = fmt.Errorf("%s: %w", region, err)
-				}
-			})
-		}
-		wg.Wait()
-		return errors.Join(failures...)
-	})
+	err := ui.Progress(
+		ctx,
+		fmt.Sprintf("Scanning %d regions for matching instances...", len(regions)),
+		func(ctx context.Context) error {
+			var wg sync.WaitGroup
+			for i, region := range regions {
+				wg.Go(func() {
+					var err error
+					results[i], err = aws.GetDeployedInstances(
+						ctx,
+						region,
+						tags,
+						action,
+						instanceIDs,
+					)
+					if err != nil {
+						failures[i] = fmt.Errorf("%s: %w", region, err)
+					}
+				})
+			}
+			wg.Wait()
+			return errors.Join(failures...)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}

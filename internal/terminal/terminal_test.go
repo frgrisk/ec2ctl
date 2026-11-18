@@ -2,9 +2,13 @@ package terminal
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"io"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/frgrisk/ec2ctl/adapter/aws"
 )
@@ -27,7 +31,7 @@ func TestRedirectedStreams(t *testing.T) {
 	}
 	failure := errors.New("action failed")
 	calls := 0
-	if err := ui.Progress("scanning", func() error { calls++; return failure }); !errors.Is(err, failure) || calls != 1 {
+	if err := ui.Progress(t.Context(), "scanning", func(context.Context) error { calls++; return failure }); !errors.Is(err, failure) || calls != 1 {
 		t.Fatalf("progress: calls=%d error=%v", calls, err)
 	}
 	if output.Len() != 0 || diagnostics.Len() != 0 {
@@ -57,12 +61,82 @@ func TestAccessibleConfirmation(t *testing.T) {
 			t.Setenv("ACCESSIBLE", "1")
 			var output, diagnostics bytes.Buffer
 			ui := New(strings.NewReader(answer+"\n"), &output, &diagnostics)
-			confirmed, err := ui.Confirm("Would you like to proceed?", "")
+			confirmed, err := ui.Confirm(t.Context(), "Would you like to proceed?", "")
 			if err != nil || confirmed != (answer == "yes") {
 				t.Fatalf("confirmed=%t err=%v", confirmed, err)
 			}
 			if !strings.Contains(output.String(), "Would you like to proceed?") || diagnostics.Len() != 0 {
 				t.Fatalf("output=%q diagnostics=%q", output.String(), diagnostics.String())
+			}
+		})
+	}
+}
+
+func TestProgressCancellationJoinsAction(t *testing.T) {
+	for _, canAnimate := range []bool{false, true} {
+		name := "plain"
+		if canAnimate {
+			name = "animated"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TERM", "screen-256color")
+			ui := New(strings.NewReader(""), io.Discard, io.Discard)
+			ui.canAnimate = canAnimate
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			started := make(chan struct{})
+			cancelObserved := make(chan struct{})
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			releaseAction := func() { releaseOnce.Do(func() { close(release) }) }
+			exited := make(chan struct{})
+			done := make(chan error, 1)
+			t.Cleanup(func() {
+				cancel()
+				releaseAction()
+				for range done {
+				}
+			})
+			go func() {
+				defer close(done)
+				done <- ui.Progress(ctx, "scanning", func(ctx context.Context) error {
+					close(started)
+					<-ctx.Done()
+					close(cancelObserved)
+					<-release
+					defer close(exited)
+					return ctx.Err()
+				})
+			}()
+			select {
+			case <-started:
+			case <-time.After(2 * time.Second):
+				t.Fatal("action did not start")
+			}
+			cancel()
+			select {
+			case <-cancelObserved:
+			case <-time.After(2 * time.Second):
+				t.Fatal("action did not observe cancellation")
+			}
+			select {
+			case err := <-done:
+				t.Fatalf("progress returned while its action was still blocked: %v", err)
+			case <-time.After(50 * time.Millisecond):
+			}
+			releaseAction()
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("error = %v, want context cancellation", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("progress did not stop")
+			}
+			select {
+			case <-exited:
+			default:
+				t.Fatal("progress returned before its action exited")
 			}
 		})
 	}

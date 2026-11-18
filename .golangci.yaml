@@ -5,11 +5,14 @@ run:
 linters:
   enable:
     - asciicheck
+    - containedctx
+    - contextcheck
     - goconst
     - gocritic
     - gosec
     - misspell
     - mnd
+    - noctx
     - prealloc
     - revive
     - unconvert

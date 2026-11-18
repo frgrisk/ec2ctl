@@ -41,8 +41,13 @@ type Instance struct {
 }
 
 // GetDeployedInstances retrieves the status of all deployed instances in a given region
-func GetDeployedInstances(region string, tags map[string]string, action string, instanceIDs []string) (RegionSummary, error) {
-	ctx := context.TODO()
+func GetDeployedInstances(
+	ctx context.Context,
+	region string,
+	tags map[string]string,
+	action string,
+	instanceIDs []string,
+) (RegionSummary, error) {
 	var rSummary RegionSummary
 	rSummary.Region = region
 
@@ -209,8 +214,12 @@ func GetDeployedInstances(region string, tags map[string]string, action string, 
 }
 
 // StartStopInstance starts or stops an AWS Instance
-func StartStopInstance(region string, action string, instanceIDs []string) ([]types.InstanceStateChange, error) {
-	ctx := context.TODO()
+func StartStopInstance(
+	ctx context.Context,
+	region string,
+	action string,
+	instanceIDs []string,
+) ([]types.InstanceStateChange, error) {
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
 	// environment and shared configuration values.
@@ -273,9 +282,12 @@ func StartStopInstance(region string, action string, instanceIDs []string) ([]ty
 }
 
 // ModifyInstanceType modifies an AWS Instance type
-func ModifyInstanceType(region string, instanceType string, instanceID string) (err error) {
-	ctx := context.TODO()
-
+func ModifyInstanceType(
+	ctx context.Context,
+	region string,
+	instanceType string,
+	instanceID string,
+) (err error) {
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
 	// environment and shared configuration values.
@@ -311,9 +323,7 @@ func ModifyInstanceType(region string, instanceType string, instanceID string) (
 	return
 }
 
-func TerminateInstances(region string, instances []string) (err error) {
-	ctx := context.TODO()
-
+func TerminateInstances(ctx context.Context, region string, instances []string) (err error) {
 	// Config sources can be passed to LoadDefaultConfig, these sources can implement
 	// one or more provider interfaces. These sources take priority over the standard
 	// environment and shared configuration values.

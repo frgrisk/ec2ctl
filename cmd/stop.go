@@ -43,6 +43,7 @@ var stopCmd = &cobra.Command{
 			return err
 		}
 		return startStop(
+			cmd.Context(),
 			commandTerminal(cmd),
 			args,
 			aws.InstanceStop,

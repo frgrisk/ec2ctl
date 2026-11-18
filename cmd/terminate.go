@@ -23,6 +23,7 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -52,6 +53,7 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 	// Get account summary based on regions and tags specified
 	ui := commandTerminal(cmd)
 	accSum, err := getAccountSummary(
+		cmd.Context(),
 		ui,
 		regions,
 		tags,
@@ -75,6 +77,7 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 		k, v := group.region, group.ids
 		if !force {
 			confirm, err := ui.Confirm(
+				cmd.Context(),
 				fmt.Sprintf("Are you sure you want to terminate instance(s) [%s] in region %s?", strings.Join(v, ", "), k),
 				"Termination is permanent and cannot be undone.")
 			if err != nil {
@@ -86,9 +89,13 @@ func terminateInstance(cmd *cobra.Command, instances []string) error {
 				continue
 			}
 		}
-		if err := ui.Progress(fmt.Sprintf("Requesting termination in %s...", k), func() error {
-			return aws.TerminateInstances(k, v)
-		}); err != nil {
+		if err := ui.Progress(
+			cmd.Context(),
+			fmt.Sprintf("Requesting termination in %s...", k),
+			func(ctx context.Context) error {
+				return aws.TerminateInstances(ctx, k, v)
+			},
+		); err != nil {
 			return fmt.Errorf("terminate in %s: %w", k, err)
 		}
 		ui.Printf("%s: termination requested for %v\n", k, v)

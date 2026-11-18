@@ -60,9 +60,19 @@ func TestInstanceActionsDryRun(t *testing.T) {
 
 				var err error
 				if action == modify {
-					err = ModifyInstanceType(testRegion, "t3.small", instanceID)
+					err = ModifyInstanceType(
+						t.Context(),
+						testRegion,
+						"t3.small",
+						instanceID,
+					)
 				} else {
-					_, err = StartStopInstance(testRegion, action, []string{instanceID})
+					_, err = StartStopInstance(
+						t.Context(),
+						testRegion,
+						action,
+						[]string{instanceID},
+					)
 				}
 				wantRequests := 1
 				if code == DryRunOperation {
@@ -136,7 +146,13 @@ func TestGetDeployedInstancesSortOrder(t *testing.T) {
 		}
 	})
 
-	summary, err := GetDeployedInstances(testRegion, nil, InstanceStatus, nil)
+	summary, err := GetDeployedInstances(
+		t.Context(),
+		testRegion,
+		nil,
+		InstanceStatus,
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +185,13 @@ func TestInventoryPaginationAndMissingFields(t *testing.T) {
 		}
 		fmt.Fprint(w, `<DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>i-00000000000000002</instanceId><instanceState><name>stopped</name></instanceState></item></instancesSet></item></reservationSet></DescribeInstancesResponse>`)
 	})
-	summary, err := GetDeployedInstances(testRegion, nil, InstanceStatus, nil)
+	summary, err := GetDeployedInstances(
+		t.Context(),
+		testRegion,
+		nil,
+		InstanceStatus,
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

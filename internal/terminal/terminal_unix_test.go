@@ -4,6 +4,7 @@ package terminal
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -84,7 +85,7 @@ func TestTerminalPresentationPolicy(t *testing.T) {
 			// All disabled modes must run the action exactly once and write no animation.
 			if mode != normalMode {
 				calls := 0
-				progressErr := ui.Progress("scanning", func() error {
+				progressErr := ui.Progress(t.Context(), "scanning", func(context.Context) error {
 					calls++
 					return nil
 				})
@@ -136,7 +137,7 @@ func TestConfirmHidesKeyHelp(t *testing.T) {
 	}
 	var output bytes.Buffer
 	diagnostics := &confirmationTerminal{file: slave, input: master}
-	confirmed, err := New(slave, &output, diagnostics).Confirm("Proceed with selection?", "Review the selected instances.")
+	confirmed, err := New(slave, &output, diagnostics).Confirm(t.Context(), "Proceed with selection?", "Review the selected instances.")
 	hasConfirmedAnswer := confirmed && diagnostics.hasAnswered
 	if err != nil || !hasConfirmedAnswer {
 		t.Fatalf(
