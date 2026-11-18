@@ -37,11 +37,17 @@ import (
 
 // startCmd represents the start command
 var startCmd = &cobra.Command{
-	Use:   "start [INSTANCE-ID...]",
-	Short: "Bring stopped instances online",
-	Long:  "Find stopped instances, review the matches, and confirm before starting them.",
-	Example: `  ec2ctl start --regions us-east-1 --tag Environment=dev
+	GroupID: changeGroup,
+	Use:     "start [INSTANCE-ID...]",
+	Short:   "Bring stopped instances online",
+	Long:    "Find stopped instances, review the matches, and confirm before starting them.",
+	Example: `  # Review and start development instances
+  ec2ctl start --regions us-east-1 --tag Environment=dev
+
+  # Review and start one instance
   ec2ctl start --regions us-east-1 i-0123456789abcdef0
+
+  # Start matching instances without confirmation
   ec2ctl start --regions us-east-1 --tag Environment=dev --force`,
 	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

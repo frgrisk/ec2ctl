@@ -33,10 +33,11 @@ import (
 
 // terminateCmd represents the terminate command
 var terminateCmd = &cobra.Command{
+	GroupID: changeGroup,
 	Use:     "terminate INSTANCE-ID [INSTANCE-ID...]",
 	Short:   "Terminate one or more instances",
 	Long:    `Permanently terminate the specified instances. This cannot be undone.`,
-	Example: "  ec2ctl terminate --regions us-east-1 i-0123456789abcdef0",
+	Example: "  # Permanently terminate one instance after confirmation\n  ec2ctl terminate --regions us-east-1 i-0123456789abcdef0",
 	Args: func(_ *cobra.Command, args []string) error {
 		return validateInstanceArgs(args)
 	},

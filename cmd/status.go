@@ -39,13 +39,21 @@ import (
 var wide bool
 
 var statusCmd = &cobra.Command{
+	GroupID: exploreGroup,
 	Use:     "status [INSTANCE-ID...]",
 	Aliases: []string{"ls", "list"},
 	Short:   "See your fleet, grouped by region",
 	Long:    "Show matching instances with their state, type and private IP. Use --wide for all details.",
-	Example: `  ec2ctl status --regions us-east-1,ap-southeast-1
+	Example: `  # Compare regions
+  ec2ctl status --regions us-east-1,ap-southeast-1
+
+  # Find development instances
   ec2ctl status --tag Environment=dev
+
+  # Inspect all details for one instance
   ec2ctl status i-0123456789abcdef0 --wide
+
+  # Export fleet data
   ec2ctl status -o json`,
 	Args: optionalInstanceArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

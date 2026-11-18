@@ -17,10 +17,11 @@ const (
 
 // Synthetic data makes the fleet view discoverable without an AWS account.
 var demoCmd = &cobra.Command{
+	GroupID: exploreGroup,
 	Use:     "demo",
 	Short:   "Explore a sample fleet without connecting to AWS",
 	Args:    cobra.NoArgs,
-	Example: "  ec2ctl demo\n  ec2ctl demo --wide\n  ec2ctl demo -o json",
+	Example: "  # Explore the sample fleet offline\n  ec2ctl demo\n\n  # Inspect all sample details\n  ec2ctl demo --wide\n\n  # Preview the JSON format\n  ec2ctl demo -o json",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		summary := aws.AccountSummary{
 			{Region: demoAsiaRegion, Instances: []aws.Instance{
