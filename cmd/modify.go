@@ -42,7 +42,9 @@ Use status to check the IDs, regions and current types first.`,
 		return validateInstanceArgs(args)
 	},
 	Example: `  # Resize a specific instance
-  ec2ctl modify --regions us-east-1 --type t3.small i-0123456789abcdef0`,
+  ec2ctl modify --regions us-east-1 \
+    --type t3.small \
+    i-0123456789abcdef0`,
 	RunE: modifyInstances,
 }
 

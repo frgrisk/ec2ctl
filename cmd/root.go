@@ -63,7 +63,8 @@ Omit --regions to search all enabled regions.`,
   ec2ctl status --output json
 
   # Start stopped development instances
-  ec2ctl start --regions us-east-1 --tag Environment=dev`,
+  ec2ctl start --regions us-east-1 \
+    --tag Environment=dev`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
